@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { Command } from "commander"
 import { ZodError } from "zod"
 import { auth } from "./cmd/auth.js"
@@ -14,7 +17,8 @@ import { models } from "./cmd/models.js"
 import { register_resume } from "./cmd/resume.js"
 import { whoami } from "./cmd/whoami.js"
 
-const version = "0.1.3"
+const pkg_path = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json")
+const { version } = JSON.parse(readFileSync(pkg_path, "utf8")) as { version: string }
 
 const help_after = `
 vhscli is a command-line tool that talks to ai models in the cloud to make
