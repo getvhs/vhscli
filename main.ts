@@ -14,7 +14,7 @@ import { models } from "./cmd/models.js"
 import { register_resume } from "./cmd/resume.js"
 import { whoami } from "./cmd/whoami.js"
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 const help_after = `
 vhscli is a command-line tool that talks to ai models in the cloud to make
