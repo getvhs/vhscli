@@ -80,7 +80,7 @@ async function run(prompt_arg: string, opts: {
   })
 
   console.log("generating image...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id })
+  const submit_res = await invoke(sess, "main2/submit", { task_id }, 300_000)
   if (!submit_res.ok) die(submit_res.err)
 
   const done = await pg_get(sess, "task2", "result, err", task_id)

@@ -100,7 +100,7 @@ async function run(prompt_arg: string, opts: Opts) {
   })
 
   process.stdout.write("generating video...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id })
+  const submit_res = await invoke(sess, "main2/submit", { task_id }, 20_000)
   if (!submit_res.ok) {
     process.stdout.write("\n")
     die(submit_res.err)

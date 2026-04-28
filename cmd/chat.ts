@@ -64,7 +64,7 @@ async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]
     }),
   })
 
-  const submit_res = await invoke(sess, "main2/submit", { task_id })
+  const submit_res = await invoke(sess, "main2/submit", { task_id }, 60_000)
   if (!submit_res.ok) die(submit_res.err)
 
   const result = schema.Response.parse(submit_res.result)

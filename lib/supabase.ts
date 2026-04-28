@@ -12,12 +12,12 @@ function auth_headers(sess: Session) {
   }
 }
 
-export async function invoke(sess: Session, fn: string, body: Record<string, unknown>): Promise<any> {
+export async function invoke(sess: Session, fn: string, body: Record<string, unknown>, timeout_ms: number): Promise<any> {
   const res = await fetch_with_timeout(`${supabase_url}/functions/v1/${fn}`, {
     method: "POST",
     headers: { ...auth_headers(sess), "content-type": "application/json" },
     body: JSON.stringify(body),
-    timeout_ms: 120_000,
+    timeout_ms,
   })
 
   if (!res.ok) die(`edge function error: ${res.status} ${await res.text()}`)
