@@ -1,10 +1,10 @@
 {
-  "name": "vhscli",
+  "name": "@getvhs/vhscli",
   "version": "0.1.0",
   "description": "generate images and videos with ai",
   "type": "module",
   "bin": {
-    "vhscli": "./dist/main.js"
+    "vhscli": "dist/main.js"
   },
   "files": [
     "dist",
