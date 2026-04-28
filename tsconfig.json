@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["main.ts", "cmd/**/*.ts", "lib/**/*.ts"]
+}

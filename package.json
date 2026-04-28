@@ -1,0 +1,30 @@
+{
+  "name": "vhscli",
+  "version": "0.1.0",
+  "description": "generate images and videos with ai",
+  "type": "module",
+  "bin": {
+    "vhscli": "./dist/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "prepare": "npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
+  }
+}
