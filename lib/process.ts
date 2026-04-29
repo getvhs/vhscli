@@ -30,8 +30,8 @@ export async function run_process(cmd: string, args: string[], opts: RunOpts = {
 
 export async function open_browser(url: string) {
   const platform = process.platform
-  const cmd = platform === "darwin" ? "open" : platform === "win32" ? "cmd" : "xdg-open"
-  const args = platform === "win32" ? ["/c", "start", "", url] : [url]
+  const cmd = platform === "darwin" ? "open" : platform === "win32" ? "rundll32" : "xdg-open"
+  const args = platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url]
 
   const child = spawn(cmd, args, { detached: true, stdio: "ignore" })
   await new Promise<void>((resolve, reject) => {
