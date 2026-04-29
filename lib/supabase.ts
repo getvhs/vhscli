@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { readFile, rm } from "node:fs/promises"
+import { fileTypeFromFile } from "file-type"
 import { die } from "./error.js"
 import { fetch_with_timeout } from "./http.js"
 import { run_process } from "./process.js"
@@ -89,10 +90,9 @@ export async function upload_image(sess: Session, path: string) {
 }
 
 async function detect_mime(path: string) {
-  const res = await run_process("file", ["--mime-type", "-b", path], { stdout: "pipe" })
-  const mime = res.stdout.trim()
-  if (res.code !== 0 || !mime) die(`file mime detection failed: ${path}`)
-  return mime
+  const result = await fileTypeFromFile(path)
+  if (!result) die(`file mime detection failed: ${path}`)
+  return result.mime
 }
 
 async function parse_body(res: Response) {
