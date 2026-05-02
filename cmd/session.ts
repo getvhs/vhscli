@@ -1,15 +1,15 @@
 import { die } from "../lib/error.js"
 import { load_session } from "../lib/session.js"
-import { auth } from "./auth.js"
+import { login } from "./login.js"
 
 export async function get_session() {
-  const first = await load_session()
-  if (first) return first
+  const existing = await load_session()
+  if (existing) return existing
 
-  console.log("no valid session. launching auth...")
-  await auth()
+  console.log("no valid session. launching login...")
+  await login()
 
-  const second = await load_session()
-  if (!second) die("auth failed")
-  return second
+  const session = await load_session()
+  if (!session) die("login failed")
+  return session
 }

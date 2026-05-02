@@ -17,7 +17,7 @@ export type Session = {
   email?: string
 }
 
-export const creds_schema = z.object({
+export const creds = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
 })
@@ -66,17 +66,17 @@ export async function load_session(): Promise<Session | null> {
     throw err
   }
 
-  let creds = zparse(creds_schema, raw, "bad session")
+  let parsed = zparse(creds, raw, "bad session")
   const now = Math.floor(Date.now() / 1000)
-  if (jwt_payload(creds.access_token).exp - now < 60) {
-    const refreshed = await refresh_session(creds.refresh_token)
+  if (jwt_payload(parsed.access_token).exp - now < 60) {
+    const refreshed = await refresh_session(parsed.refresh_token)
     if (!refreshed) return null
-    creds = refreshed
-    await save_creds(creds.access_token, creds.refresh_token)
+    parsed = refreshed
+    await save_creds(parsed.access_token, parsed.refresh_token)
   }
 
-  const payload = jwt_payload(creds.access_token)
-  return { access_token: creds.access_token, user_id: payload.sub, email: payload.email }
+  const payload = jwt_payload(parsed.access_token)
+  return { access_token: parsed.access_token, user_id: payload.sub, email: payload.email }
 }
 
 async function refresh_session(refresh_token: string) {

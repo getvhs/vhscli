@@ -1,6 +1,8 @@
-import { get_session } from "./session.js"
+import { die } from "../lib/error.js"
+import { load_session } from "../lib/session.js"
 
 export async function whoami() {
-  const { user_id, email } = await get_session()
-  console.log(email ?? user_id)
+  const session = await load_session()
+  if (!session) die("not logged in")
+  console.log(session.email ?? session.user_id)
 }

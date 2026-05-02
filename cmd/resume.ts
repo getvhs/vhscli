@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import { die } from "../lib/error.js"
 import * as seedance_schema from "../lib/schema/seedance_2.js"
+import { task2 } from "../lib/schema/task2.js"
 import { type Session } from "../lib/session.js"
 import { invoke, pg_get } from "../lib/supabase.js"
 import { zparse } from "../lib/util.js"
@@ -10,7 +11,7 @@ import * as nano_banana_pro from "./generate/nano_banana_pro.js"
 import * as seedance_2 from "./generate/seedance_2.js"
 import * as seedream_4_5 from "./generate/seedream_4_5.js"
 import * as seedream_5 from "./generate/seedream_5.js"
-import { save_t3_seedance_2_result } from "../lib/t3.js"
+import { poll_response, save_t3_seedance_2_result } from "../lib/t3.js"
 import { get_session } from "./session.js"
 
 export function register_resume(program: Command) {
@@ -34,13 +35,16 @@ async function run(task_id: string, opts: { output?: string }) {
   while (true) {
     const data = await pg_get(sess, "task2", "endpoint, payload, result, err", task_id)
     if (!data) die(`task not found: ${task_id}`)
-    if (data.err) die(data.err)
-    if (data.result) {
-      await save_result(sess, task_id, data.endpoint, data.payload, data.result, opts.output ?? null)
+    const row = zparse(task2, data, "bad task2 row")
+    if (row.err) die(row.err)
+    if (row.result) {
+      if (!row.endpoint) die("task has no endpoint")
+      await save_result(sess, task_id, row.endpoint, row.payload, row.result, opts.output ?? null)
       return
     }
-    if (data.endpoint === "t3:seedance2") {
-      const poll_res = await invoke(sess, "main2/poll/t3", { task_id }, 60_000)
+    if (row.endpoint === "t3:seedance2") {
+      // server endpoint /poll/t3 will block until the task is complete or wait up to 40 seconds
+      const poll_res = await invoke(sess, "main2/poll/t3", { task_id }, poll_response, 60_000)
       if (!poll_res.ok) die(poll_res.err)
       continue
     }

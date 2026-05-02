@@ -4,6 +4,7 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
+import { task2 } from "../../lib/schema/task2.js"
 import { type Session } from "../../lib/session.js"
 import { submit } from "../../lib/submit.js"
 import { pg_get, upload_file, upload_image } from "../../lib/supabase.js"
@@ -108,20 +109,25 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
 
 export async function save(sess: Session, task_id: string, payload: Payload, output: string | null) {
   let dotted = false
+  const finish_dots = () => { if (dotted) process.stdout.write("\n") }
   while (true) {
     const data = await pg_get(sess, "task2", "result, err", task_id)
     if (!data) {
-      if (dotted) process.stdout.write("\n")
+      finish_dots()
       die(`task disappeared: ${task_id}`)
     }
-    if (data.err) {
-      if (dotted) process.stdout.write("\n")
-      if (await try_t3_fallback(sess, payload, data.err, output)) return
-      die(data.err)
+    const row = zparse(task2, data, "bad task2 row")
+    if (row.err) {
+      finish_dots()
+      if (should_t3_fallback(payload, row.err)) {
+        await run_t3_fallback(sess, payload, output)
+        return
+      }
+      die(row.err)
     }
-    if (data.result) {
-      if (dotted) process.stdout.write("\n")
-      const url = zparse(schema.response, data.result, "bad seedance-2 response").content.video_url
+    if (row.result) {
+      finish_dots()
+      const url = zparse(schema.response, row.result, "bad seedance-2 response").content.video_url
       await save_media(url, output, "seedance-2")
       return
     }
@@ -131,14 +137,16 @@ export async function save(sess: Session, task_id: string, payload: Payload, out
   }
 }
 
-async function try_t3_fallback(sess: Session, payload: Payload, err: string, output: string | null): Promise<boolean> {
+function should_t3_fallback(payload: Payload, err: string): boolean {
   const has_images = payload.content.some((c) => c.type === "image_url")
-  if (!has_images || !err.includes("InputImageSensitiveContentDetected.PrivacyInformation")) return false
+  return has_images && err.includes("InputImageSensitiveContentDetected.PrivacyInformation")
+}
+
+async function run_t3_fallback(sess: Session, payload: Payload, output: string | null) {
   console.log("input image contains a real face; falling back to t3-seedance-2 with face referencing...")
   const t3_payload = await translate_seedance_2_to_t3(sess, payload)
   const t3_result = await submit_and_poll_t3(sess, t3_payload)
   await save_t3_seedance_2_result(t3_result, output)
-  return true
 }
 
 function parse_duration(value: string) {

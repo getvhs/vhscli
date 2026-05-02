@@ -1,7 +1,8 @@
 import { Command, InvalidArgumentError } from "commander"
 import { die } from "../lib/error.js"
 import { read_prompt } from "../lib/prompt.js"
-import * as schema from "../lib/schema/seed.js"
+import * as schema from "../lib/schema/seed_lite.js"
+import { submit_response } from "../lib/submit.js"
 import { invoke, pg_insert, upload_file, upload_image } from "../lib/supabase.js"
 import { zparse } from "../lib/util.js"
 import { get_session } from "./session.js"
@@ -65,7 +66,7 @@ async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]
     }, "bad chat payload"),
   })
 
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, 60_000)
+  const submit_res = await invoke(sess, "main2/submit", { task_id }, submit_response, 60_000)
   if (!submit_res.ok) die(submit_res.err)
 
   const result = zparse(schema.response, submit_res.result, "bad chat response")

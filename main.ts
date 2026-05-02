@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander"
-import { auth } from "./cmd/auth.js"
+import { login } from "./cmd/login.js"
 import { register_chat } from "./cmd/chat.js"
 import * as gpt_image_2 from "./cmd/generate/gpt_image_2.js"
 import * as nano_banana_2 from "./cmd/generate/nano_banana_2.js"
@@ -38,7 +38,7 @@ const program = new Command()
 
 program.command("login")
   .description("log in with google (opens browser)")
-  .action(auth)
+  .action(login)
 
 program.command("logout")
   .description("log out and delete local access tokens")

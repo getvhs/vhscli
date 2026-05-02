@@ -251,8 +251,8 @@ Image type is detected from file content. JPEG and PNG are uploaded as-is; other
 ```txt
 main.ts
 cmd/
-  auth.ts
   chat.ts
+  login.ts
   logout.ts
   models.ts
   resume.ts
@@ -267,16 +267,18 @@ cmd/
     seedream_5.ts
 lib/
   error.ts
-  http.ts
   media.ts
   process.ts
   prompt.ts
   session.ts
+  submit.ts
   supabase.ts
+  t3.ts
+  util.ts
   schema/
 ```
 
-Command code lives in `cmd/`. Shared runtime code lives in `lib/`. Model schemas are split out so commands can import short names like `schema.Request` and `schema.Response`.
+Command code lives in `cmd/`. Shared runtime code lives in `lib/`. Model schemas are split out so commands can import short names like `schema.request` and `schema.response`.
 
 ## Core Flow
 

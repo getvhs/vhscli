@@ -1,19 +1,28 @@
 import { createHash } from "node:crypto"
 import { readFile, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { basename, join } from "node:path"
+import { z } from "zod"
 import { fileTypeFromFile } from "file-type"
 import { die } from "./error.js"
-import { kfetch } from "./util.js"
+import { kfetch, zparse } from "./util.js"
 import { run_process } from "./process.js"
 import { supabase_anon_key, supabase_url, type Session } from "./session.js"
 
 function auth_headers(sess: Session) {
   return {
     apikey: supabase_anon_key,
-    Authorization: `Bearer ${sess.access_token}`,
+    authorization: `Bearer ${sess.access_token}`,
   }
 }
 
-export async function invoke(sess: Session, fn: string, body: Record<string, unknown>, timeout_ms: number): Promise<any> {
+export async function invoke<T extends z.ZodType>(
+  sess: Session,
+  fn: string,
+  body: Record<string, unknown>,
+  schema: T,
+  timeout_ms: number,
+): Promise<z.infer<T>> {
   const res = await kfetch(`${supabase_url}/functions/v1/${fn}`, {
     method: "POST",
     headers: { ...auth_headers(sess), "content-type": "application/json" },
@@ -22,13 +31,13 @@ export async function invoke(sess: Session, fn: string, body: Record<string, unk
   })
 
   if (!res.ok) die(`edge function error: ${res.status} ${await res.text()}`)
-  return await res.json()
+  return zparse(schema, await res.json(), `bad ${fn} response`)
 }
 
 export async function pg_insert(sess: Session, table: string, row: Record<string, unknown>) {
   const res = await kfetch(`${supabase_url}/rest/v1/${table}`, {
     method: "POST",
-    headers: { ...auth_headers(sess), "content-type": "application/json", Prefer: "return=minimal" },
+    headers: { ...auth_headers(sess), "content-type": "application/json", prefer: "return=minimal" },
     body: JSON.stringify(row),
     timeout_ms: 15_000,
   })
@@ -36,7 +45,7 @@ export async function pg_insert(sess: Session, table: string, row: Record<string
   if (!res.ok) die(`insert failed: ${res.status} ${await res.text()}`)
 }
 
-export async function pg_get(sess: Session, table: string, select: string, id: string): Promise<any> {
+export async function pg_get(sess: Session, table: string, select: string, id: string): Promise<Record<string, unknown> | null> {
   const url = new URL(`${supabase_url}/rest/v1/${table}`)
   url.searchParams.set("select", select)
   url.searchParams.set("id", `eq.${id}`)
@@ -47,7 +56,10 @@ export async function pg_get(sess: Session, table: string, select: string, id: s
 
   const rows = await res.json()
   if (!Array.isArray(rows)) die("bad pg response")
-  return rows[0] ?? null
+  const row = rows[0]
+  if (row == null) return null
+  if (typeof row !== "object") die("bad pg response")
+  return row as Record<string, unknown>
 }
 
 export async function upload_file(sess: Session, path: string, content_type?: string) {
@@ -64,9 +76,11 @@ export async function upload_file(sess: Session, path: string, content_type?: st
   })
 
   if (!res.ok) {
-    const body = await parse_body(res)
-    const duplicate = res.status === 409 || (is_record(body) && body.statusCode === "409")
-    if (!duplicate) die(`upload failed: ${res.status} ${format_body(body)}`)
+    const body = await res.text()
+    let json: unknown
+    try { json = JSON.parse(body) } catch { /* not json; keep raw text */ }
+    const inner_409 = is_record(json) && json.statusCode === "409"
+    if (res.status !== 409 && !inner_409) die(`upload failed: ${res.status} ${body}`)
   }
 
   return `${supabase_url}/storage/v1/object/public/tmp/${remote_path}`
@@ -78,7 +92,7 @@ export async function upload_image(sess: Session, path: string) {
     return { url: await upload_file(sess, path, mime), mime }
   }
 
-  const tmp = `${path}.vhscli-${Date.now()}.jpg`
+  const tmp = join(tmpdir(), `vhscli-${process.pid}-${Date.now()}-${basename(path)}.jpg`)
   const res = await run_process("sips", ["-s", "format", "jpeg", path, "--out", tmp])
   if (res.code !== 0) die(`sips conversion failed: ${res.code}`)
 
@@ -95,15 +109,6 @@ async function detect_mime(path: string) {
   return result.mime
 }
 
-async function parse_body(res: Response) {
-  const text = await res.text()
-  try { return JSON.parse(text) as unknown } catch { return text }
-}
-
 function is_record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
-}
-
-function format_body(value: unknown) {
-  return typeof value === "string" ? value : JSON.stringify(value)
 }

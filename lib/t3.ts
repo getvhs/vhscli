@@ -3,14 +3,26 @@ import { die } from "./error.js"
 import { save_media } from "./media.js"
 import * as seedance_schema from "./schema/seedance_2.js"
 import * as schema from "./schema/t3_seedance_2.js"
+import { task2 } from "./schema/task2.js"
 import { type Session } from "./session.js"
 import { invoke, pg_get, pg_insert } from "./supabase.js"
+import { submit_response } from "./submit.js"
 import { zparse } from "./util.js"
 
+const new_asset_response = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), token360_asset_id: z.string() }),
+  z.object({ ok: z.literal(false), err: z.string() }),
+])
+
+export const poll_response = z.discriminatedUnion("ok", [
+  z.looseObject({ ok: z.literal(true), is_completed: z.boolean().optional() }),
+  z.object({ ok: z.literal(false), err: z.string() }),
+])
+
 export async function new_asset(sess: Session, image_url: string): Promise<string> {
-  const res = await invoke(sess, "t3/new_asset", { image_url }, 90_000)
+  const res = await invoke(sess, "t3/new_asset", { image_url }, new_asset_response, 90_000)
   if (!res.ok) die(`t3/new_asset: ${res.err}`)
-  return res.token360_asset_id as string
+  return res.token360_asset_id
 }
 
 export async function submit_and_poll_t3(sess: Session, payload: Record<string, unknown>): Promise<unknown> {
@@ -24,7 +36,7 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
   })
 
   process.stdout.write("generating video...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, 90_000)
+  const submit_res = await invoke(sess, "main2/submit", { task_id }, submit_response, 90_000)
   if (!submit_res.ok) {
     process.stdout.write("\n")
     die(submit_res.err)
@@ -39,7 +51,7 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
 
   while (true) {
     process.stdout.write(".")
-    const poll_res = await invoke(sess, "main2/poll/t3", { task_id }, 60_000)
+    const poll_res = await invoke(sess, "main2/poll/t3", { task_id }, poll_response, 60_000)
     if (!poll_res.ok) {
       process.stdout.write("\n")
       die(poll_res.err)
@@ -50,9 +62,10 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
 
   const data = await pg_get(sess, "task2", "result, err", task_id)
   if (!data) die(`task disappeared: ${task_id}`)
-  if (data.err) die(data.err)
-  if (!data.result) die("task completed without result")
-  return data.result
+  const row = zparse(task2, data, "bad task2 row")
+  if (row.err) die(row.err)
+  if (!row.result) die("task completed without result")
+  return row.result
 }
 
 export async function save_t3_seedance_2_result(result: unknown, output: string | null) {

@@ -17,7 +17,7 @@ export async function run_process(cmd: string, args: string[], opts: RunOpts = {
     child.stdout.on("data", (chunk: string) => { stdout += chunk })
   }
 
-  const code = await new Promise<number>((resolve, reject) => {
+  const code = await new Promise<number | null>((resolve, reject) => {
     child.on("error", reject)
     child.on("close", resolve)
   }).catch((err) => {
