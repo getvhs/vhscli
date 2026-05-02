@@ -249,36 +249,38 @@ Image type is detected from file content. JPEG and PNG are uploaded as-is; other
 ## Project Structure
 
 ```txt
-main.ts
-cmd/
-  chat.ts
-  login.ts
-  logout.ts
-  models.ts
-  resume.ts
-  session.ts
-  whoami.ts
-  generate/
-    gpt_image_2.ts
-    nano_banana_2.ts
-    nano_banana_pro.ts
-    seedance_2.ts
-    seedream_4_5.ts
-    seedream_5.ts
-lib/
-  error.ts
-  media.ts
-  process.ts
-  prompt.ts
-  session.ts
-  submit.ts
-  supabase.ts
-  t3.ts
-  util.ts
-  schema/
+src/
+  main.ts
+  version.ts
+  cmd/
+    chat.ts
+    login.ts
+    logout.ts
+    models.ts
+    resume.ts
+    session.ts
+    whoami.ts
+    generate/
+      gpt_image_2.ts
+      nano_banana_2.ts
+      nano_banana_pro.ts
+      seedance_2.ts
+      seedream_4_5.ts
+      seedream_5.ts
+  lib/
+    error.ts
+    media.ts
+    process.ts
+    prompt.ts
+    session.ts
+    submit.ts
+    supabase.ts
+    t3.ts
+    util.ts
+    schema/
 ```
 
-Command code lives in `cmd/`. Shared runtime code lives in `lib/`. Model schemas are split out so commands can import short names like `schema.request` and `schema.response`.
+Command code lives in `src/cmd/`. Shared runtime code lives in `src/lib/`. Model schemas are split out so commands can import short names like `schema.request` and `schema.response`.
 
 ## Core Flow
 

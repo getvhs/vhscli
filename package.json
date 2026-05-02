@@ -11,7 +11,7 @@
     "README.md"
   ],
   "scripts": {
-    "gen-version": "node -e \"require('node:fs').writeFileSync('version.ts', 'export const VERSION = \\\"' + require('./package.json').version + '\\\"\\n')\"",
+    "gen-version": "node -e \"require('node:fs').writeFileSync('src/version.ts', 'export const VERSION = \\\"' + require('./package.json').version + '\\\"\\n')\"",
     "build": "npm run gen-version && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.json",
     "check": "npm run gen-version && tsc --noEmit -p tsconfig.json",
     "prepare": "npm run build"
