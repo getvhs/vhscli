@@ -11,7 +11,7 @@ const base = {
   optimize_prompt_options: z.object({ mode: z.literal("standard") }).optional(),
 }
 
-export const Request = z.discriminatedUnion("model", [
+export const request = z.discriminatedUnion("model", [
   z.object({
     model: z.literal("seedream-4-5-251128"),
     size: z.union([z.enum(["2K", "4K"]), z.string().regex(/^\d+x\d+$/)]).optional(),
@@ -24,7 +24,7 @@ export const Request = z.discriminatedUnion("model", [
   }),
 ])
 
-export const Response = z.object({
+export const response = z.object({
   model: z.string().optional(),
   created: z.number().optional(),
   data: z.array(z.object({

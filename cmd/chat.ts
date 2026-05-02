@@ -3,6 +3,7 @@ import { die } from "../lib/error.js"
 import { read_prompt } from "../lib/prompt.js"
 import * as schema from "../lib/schema/seed.js"
 import { invoke, pg_insert, upload_file, upload_image } from "../lib/supabase.js"
+import { zparse } from "../lib/util.js"
 import { get_session } from "./session.js"
 
 export function register_chat(program: Command) {
@@ -57,25 +58,20 @@ async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]
     id: task_id,
     user_id: sess.user_id,
     endpoint: "byteplus:seed-2-0-lite",
-    payload: schema.Request.parse({
+    payload: zparse(schema.request, {
       model: "seed-2-0-lite-260228",
       input: [{ role: "user", content }],
       stream: false,
-    }),
+    }, "bad chat payload"),
   })
 
   const submit_res = await invoke(sess, "main2/submit", { task_id }, 60_000)
   if (!submit_res.ok) die(submit_res.err)
 
-  const result = schema.Response.parse(submit_res.result)
-  for (const item of result.output) {
-    const parsed = schema.MessageOutput.safeParse(item)
-    if (parsed.success) {
-      console.log(parsed.data.content[0]!.text)
-      return
-    }
-  }
-  die(`no message: ${result.status}`)
+  const result = zparse(schema.response, submit_res.result, "bad chat response")
+  const message = result.output.find((o): o is schema.Message => o.type === "message")
+  if (!message) die("no message in chat response")
+  console.log(message.content[0]!.text)
 }
 
 function parse_fps(value: string) {

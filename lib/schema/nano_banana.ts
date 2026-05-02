@@ -34,7 +34,7 @@ const generation_config = z.object({
   }).optional(),
 })
 
-export const Request = z.object({
+export const request = z.object({
   contents: z.array(content),
   systemInstruction: content.optional(),
   tools: z.array(google_search_tool).optional(),
@@ -48,7 +48,7 @@ const response_part = z.object({
   thought: z.boolean().optional(),
 })
 
-export const Response = z.object({
+export const response = z.object({
   candidates: z.array(z.object({
     content: z.object({ parts: z.array(response_part).optional() }),
     finishReason: z.string().optional(),

@@ -1,6 +1,6 @@
 import { rename, unlink, writeFile } from "node:fs/promises"
 import { die } from "./error.js"
-import { fetch_with_timeout } from "./http.js"
+import { kfetch } from "./util.js"
 import { run_process } from "./process.js"
 
 const mime_ext: Record<string, string> = {
@@ -13,7 +13,7 @@ const mime_ext: Record<string, string> = {
 }
 
 export async function save_media(url: string, output: string | null, model: string) {
-  const res = await fetch_with_timeout(url, { timeout_ms: 600_000 })
+  const res = await kfetch(url, { timeout_ms: 600_000 })
   if (!res.ok) die(`download failed: ${res.status}`)
 
   const mime = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase()

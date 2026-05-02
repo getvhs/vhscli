@@ -1,24 +1,18 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { Command } from "commander"
-import { ZodError } from "zod"
 import { auth } from "./cmd/auth.js"
 import { register_chat } from "./cmd/chat.js"
-import { register_gpt_image_2 } from "./cmd/generate/gpt_image_2.js"
-import { register_nano_banana_2 } from "./cmd/generate/nano_banana_2.js"
-import { register_nano_banana_pro } from "./cmd/generate/nano_banana_pro.js"
-import { register_seedance_2 } from "./cmd/generate/seedance_2.js"
-import { register_seedream_4_5 } from "./cmd/generate/seedream_4_5.js"
-import { register_seedream_5 } from "./cmd/generate/seedream_5.js"
+import * as gpt_image_2 from "./cmd/generate/gpt_image_2.js"
+import * as nano_banana_2 from "./cmd/generate/nano_banana_2.js"
+import * as nano_banana_pro from "./cmd/generate/nano_banana_pro.js"
+import * as seedance_2 from "./cmd/generate/seedance_2.js"
+import * as seedream_4_5 from "./cmd/generate/seedream_4_5.js"
+import * as seedream_5 from "./cmd/generate/seedream_5.js"
 import { logout } from "./cmd/logout.js"
 import { models } from "./cmd/models.js"
 import { register_resume } from "./cmd/resume.js"
 import { whoami } from "./cmd/whoami.js"
-
-const pkg_path = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json")
-const { version } = JSON.parse(readFileSync(pkg_path, "utf8")) as { version: string }
+import { VERSION } from "./version.js"
 
 const help_after = `
 vhscli is a command-line tool that talks to ai models in the cloud to make
@@ -35,7 +29,7 @@ examples:
 const program = new Command()
   .name("vhscli")
   .description("generate images and videos with ai")
-  .version(version, "-v, --version", "print version")
+  .version(VERSION, "-v, --version", "print version")
   .helpOption("-h, --help", "show help")
   .enablePositionalOptions()
   .showSuggestionAfterError(true)
@@ -64,24 +58,15 @@ const generate = program.command("generate")
   .addHelpText("after", "\nrun 'vhscli generate <model> --help' to see options for a specific model.")
   .action(function () { this.help() })
 
-register_seedance_2(generate)
-register_seedream_5(generate)
-register_seedream_4_5(generate)
-register_nano_banana_2(generate)
-register_nano_banana_pro(generate)
-register_gpt_image_2(generate)
+seedance_2.register(generate)
+seedream_5.register(generate)
+seedream_4_5.register(generate)
+nano_banana_2.register(generate)
+nano_banana_pro.register(generate)
+gpt_image_2.register(generate)
 register_chat(program)
 register_resume(program)
 
 if (process.argv.length <= 2) program.help({ error: false })
 
-try {
-  await program.parseAsync(process.argv)
-} catch (err) {
-  if (err instanceof ZodError) {
-    console.error("unexpected response shape")
-    for (const issue of err.issues) console.error(` ${issue.path.join(".")}: ${issue.message.toLowerCase()}`)
-    process.exit(1)
-  }
-  throw err
-}
+await program.parseAsync(process.argv)

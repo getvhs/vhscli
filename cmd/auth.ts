@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { die } from "../lib/error.js"
-import { CredsSchema, save_creds, supabase_url } from "../lib/session.js"
+import { creds_schema, save_creds, supabase_url } from "../lib/session.js"
 import { open_browser } from "../lib/process.js"
+import { zparse } from "../lib/util.js"
 
 const callback_html = `<!DOCTYPE html><html><body><script>
 const h = new URLSearchParams(location.hash.slice(1));
@@ -46,18 +47,20 @@ async function handle_request(
   res: ServerResponse,
   resolve: (creds: { access_token: string; refresh_token: string }) => void,
 ) {
-  try {
-    const url = new URL(req.url ?? "/", "http://localhost")
-    if (url.pathname === "/callback") return send(res, 200, callback_html, "text/html")
-    if (url.pathname !== "/token" || req.method !== "POST") return send(res, 404, "not found")
+  const url = new URL(req.url ?? "/", "http://localhost")
+  if (url.pathname === "/callback") return send(res, 200, callback_html, "text/html")
+  if (url.pathname !== "/token" || req.method !== "POST") return send(res, 404, "not found")
 
-    const parsed = CredsSchema.parse(JSON.parse(await read_body(req)))
-    send(res, 200, "ok")
-    resolve(parsed)
+  let raw: unknown
+  try {
+    raw = JSON.parse(await read_body(req))
   } catch {
     send(res, 400, "bad token")
     die("bad token")
   }
+  const parsed = zparse(creds_schema, raw, "bad token")
+  send(res, 200, "ok")
+  resolve(parsed)
 }
 
 function send(res: ServerResponse, status: number, body: string, type = "text/plain") {

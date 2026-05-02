@@ -19,7 +19,7 @@ const content = z.discriminatedUnion("type", [
   }),
 ])
 
-export const Request = z.object({
+export const request = z.object({
   model: z.literal("dreamina-seedance-2-0-260128"),
   content: z.array(content).min(1),
   return_last_frame: z.boolean().optional(),
@@ -34,7 +34,7 @@ export const Request = z.object({
   watermark: z.boolean().optional(),
 })
 
-export const Response = z.object({
+export const response = z.object({
   id: z.string(),
   status: z.literal("succeeded"),
   content: z.object({

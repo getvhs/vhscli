@@ -3,14 +3,19 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedream.js"
-import { invoke, pg_get, pg_insert, upload_image } from "../../lib/supabase.js"
+import { type Session } from "../../lib/session.js"
+import { submit } from "../../lib/submit.js"
+import { upload_image } from "../../lib/supabase.js"
+import { zparse } from "../../lib/util.js"
 import { get_session } from "../session.js"
 
 const sizes = ["2K", "3K"] as const
 const min_pixels = 3_686_400
 const max_pixels = 10_404_496
 
-export function register_seedream_5(program: Command) {
+type Opts = { output?: string; image?: string[]; size?: string }
+
+export function register(program: Command) {
   program.command("seedream-5")
     .description("generate an image with seedream 5.0")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
@@ -30,13 +35,19 @@ examples:
     .action(run)
 }
 
-async function run(prompt_arg: string, opts: { output?: string; image?: string[]; size?: string }) {
+async function run(prompt_arg: string, opts: Opts) {
+  const sess = await get_session()
+  const payload = await parse_opts(sess, prompt_arg, opts)
+  const { result } = await submit(sess, "byteplus:seedream-5-0", payload, "generating image...", 300_000)
+  await save(result, opts.output ?? null)
+}
+
+async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
   const images = opts.image ?? []
   if (images.length > 14) die("-i accepts at most 14 images")
 
-  const sess = await get_session()
-  const image_urls = []
+  const image_urls: string[] = []
   for (const img of images) {
     console.log(`uploading ${img}...`)
     image_urls.push((await upload_image(sess, img)).url)
@@ -52,27 +63,11 @@ async function run(prompt_arg: string, opts: { output?: string; image?: string[]
   else if (image_urls.length > 1) payload.image = image_urls
   if (opts.size) payload.size = opts.size
 
-  const task_id = crypto.randomUUID()
-  console.log(`task_id: ${task_id}`)
-  await pg_insert(sess, "task2", {
-    id: task_id,
-    user_id: sess.user_id,
-    endpoint: "byteplus:seedream-5-0",
-    payload: schema.Request.parse(payload),
-  })
-
-  console.log("generating image...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, 300_000)
-  if (!submit_res.ok) die(submit_res.err)
-
-  const done = await pg_get(sess, "task2", "result, err", task_id)
-  if (!done) die(`task disappeared: ${task_id}`)
-  if (done.err) die(done.err)
-  await save_seedream_5_result(done.result, opts.output ?? null)
+  return zparse(schema.request, payload, "bad seedream-5 payload")
 }
 
-export async function save_seedream_5_result(result: unknown, output: string | null) {
-  const item = schema.Response.parse(result).data[0]!
+export async function save(result: unknown, output: string | null) {
+  const item = zparse(schema.response, result, "bad seedream-5 response").data[0]!
   if (item.error) die(`provider error: ${item.error.message}`)
   if (!item.url) die("no image url")
   await save_media(item.url, output, "seedream-5")

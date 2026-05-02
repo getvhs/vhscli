@@ -1,12 +1,16 @@
 import { Command } from "commander"
 import { die } from "../lib/error.js"
-import { pg_get } from "../lib/supabase.js"
-import { save_gpt_image_2_result } from "./generate/gpt_image_2.js"
-import { save_nano_banana_2_result } from "./generate/nano_banana_2.js"
-import { save_nano_banana_pro_result } from "./generate/nano_banana_pro.js"
-import { save_seedance_2_result } from "./generate/seedance_2.js"
-import { save_seedream_4_5_result } from "./generate/seedream_4_5.js"
-import { save_seedream_5_result } from "./generate/seedream_5.js"
+import * as seedance_schema from "../lib/schema/seedance_2.js"
+import { type Session } from "../lib/session.js"
+import { invoke, pg_get } from "../lib/supabase.js"
+import { zparse } from "../lib/util.js"
+import * as gpt_image_2 from "./generate/gpt_image_2.js"
+import * as nano_banana_2 from "./generate/nano_banana_2.js"
+import * as nano_banana_pro from "./generate/nano_banana_pro.js"
+import * as seedance_2 from "./generate/seedance_2.js"
+import * as seedream_4_5 from "./generate/seedream_4_5.js"
+import * as seedream_5 from "./generate/seedream_5.js"
+import { save_t3_seedance_2_result } from "../lib/t3.js"
 import { get_session } from "./session.js"
 
 export function register_resume(program: Command) {
@@ -28,26 +32,32 @@ examples:
 async function run(task_id: string, opts: { output?: string }) {
   const sess = await get_session()
   while (true) {
-    const data = await pg_get(sess, "task2", "endpoint, result, err", task_id)
+    const data = await pg_get(sess, "task2", "endpoint, payload, result, err", task_id)
     if (!data) die(`task not found: ${task_id}`)
     if (data.err) die(data.err)
     if (data.result) {
-      await save_result(data.endpoint, data.result, opts.output ?? null)
+      await save_result(sess, task_id, data.endpoint, data.payload, data.result, opts.output ?? null)
       return
+    }
+    if (data.endpoint === "t3:seedance2") {
+      const poll_res = await invoke(sess, "main2/poll/t3", { task_id }, 60_000)
+      if (!poll_res.ok) die(poll_res.err)
+      continue
     }
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 }
 
-async function save_result(endpoint: string, result: unknown, output: string | null) {
+async function save_result(sess: Session, task_id: string, endpoint: string, payload: unknown, result: unknown, output: string | null) {
   switch (endpoint) {
-    case "byteplus:seedance-2-0": return save_seedance_2_result(result, output)
-    case "byteplus:seedream-4-5": return save_seedream_4_5_result(result, output)
-    case "byteplus:seedream-5-0": return save_seedream_5_result(result, output)
-    case "google:nano_banana_2": return save_nano_banana_2_result(result, output)
-    case "google:nano_banana_pro": return save_nano_banana_pro_result(result, output)
+    case "byteplus:seedance-2-0": return seedance_2.save(sess, task_id, zparse(seedance_schema.request, payload, "bad seedance-2 payload"), output)
+    case "t3:seedance2": return save_t3_seedance_2_result(result, output)
+    case "byteplus:seedream-4-5": return seedream_4_5.save(result, output)
+    case "byteplus:seedream-5-0": return seedream_5.save(result, output)
+    case "google:nano_banana_2": return nano_banana_2.save(result, output)
+    case "google:nano_banana_pro": return nano_banana_pro.save(result, output)
     case "openai:image_generations":
-    case "openai:image_edits": return save_gpt_image_2_result(result, output)
+    case "openai:image_edits": return gpt_image_2.save(result, output)
     default: die(`unknown endpoint: ${endpoint}`)
   }
 }

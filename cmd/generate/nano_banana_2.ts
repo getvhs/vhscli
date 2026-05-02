@@ -3,14 +3,27 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/nano_banana.js"
-import { invoke, pg_get, pg_insert, upload_image } from "../../lib/supabase.js"
+import { type Session } from "../../lib/session.js"
+import { submit } from "../../lib/submit.js"
+import { upload_image } from "../../lib/supabase.js"
+import { zparse } from "../../lib/util.js"
 import { get_session } from "../session.js"
 
 const ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
 const sizes = ["512", "1K", "2K", "4K"]
 const think_levels = ["minimal", "high"]
 
-export function register_nano_banana_2(program: Command) {
+type Opts = {
+  output?: string
+  image?: string[]
+  ratio?: string
+  size?: string
+  think?: string
+  search?: boolean
+  imageSearch?: boolean
+}
+
+export function register(program: Command) {
   program.command("nano-banana-2")
     .description("generate an image with nano banana 2")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
@@ -33,20 +46,18 @@ examples:
     .action(run)
 }
 
-async function run(prompt_arg: string, opts: {
-  output?: string
-  image?: string[]
-  ratio?: string
-  size?: string
-  think?: string
-  search?: boolean
-  imageSearch?: boolean
-}) {
+async function run(prompt_arg: string, opts: Opts) {
+  const sess = await get_session()
+  const payload = await parse_opts(sess, prompt_arg, opts)
+  const { result } = await submit(sess, "google:nano_banana_2", payload, "generating image...", 300_000)
+  await save(result, opts.output ?? null)
+}
+
+async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
   const images = opts.image ?? []
   if (images.length > 14) die("-i accepts at most 14 images")
 
-  const sess = await get_session()
   const parts: Record<string, unknown>[] = [{ text: prompt }]
   for (const img of images) {
     console.log(`uploading ${img}...`)
@@ -70,27 +81,11 @@ async function run(prompt_arg: string, opts: {
     payload.tools = [{ googleSearch: { searchTypes: search_types } }]
   }
 
-  const task_id = crypto.randomUUID()
-  console.log(`task_id: ${task_id}`)
-  await pg_insert(sess, "task2", {
-    id: task_id,
-    user_id: sess.user_id,
-    endpoint: "google:nano_banana_2",
-    payload: schema.Request.parse(payload),
-  })
-
-  console.log("generating image...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, 300_000)
-  if (!submit_res.ok) die(submit_res.err)
-
-  const done = await pg_get(sess, "task2", "result, err", task_id)
-  if (!done) die(`task disappeared: ${task_id}`)
-  if (done.err) die(done.err)
-  await save_nano_banana_2_result(done.result, opts.output ?? null)
+  return zparse(schema.request, payload, "bad nano-banana-2 payload")
 }
 
-export async function save_nano_banana_2_result(result: unknown, output: string | null) {
-  const cand = schema.Response.parse(result).candidates[0]!
+export async function save(result: unknown, output: string | null) {
+  const cand = zparse(schema.response, result, "bad nano-banana-2 response").candidates[0]!
   for (const part of cand.content.parts ?? []) {
     if (part.inlineData) {
       await save_media(part.inlineData.url, output, "nano-banana-2")

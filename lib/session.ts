@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { z } from "zod"
 import { die } from "./error.js"
-import { fetch_with_timeout } from "./http.js"
+import { kfetch, zparse } from "./util.js"
 
 export const supabase_url = "https://hlraysuoesqgfvowfkav.supabase.co"
 export const supabase_anon_key = "sb_publishable_MhbhQH2mzTf7ZhULB3zvqg_4XqUibrt"
@@ -17,18 +17,18 @@ export type Session = {
   email?: string
 }
 
-export const CredsSchema = z.object({
+export const creds_schema = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
 })
 
-const JwtPayloadSchema = z.looseObject({
+const jwt_payload_schema = z.looseObject({
   sub: z.string(),
   exp: z.number(),
   email: z.string().optional(),
 })
 
-const RefreshResponseSchema = z.looseObject({
+const refresh_response_schema = z.looseObject({
   access_token: z.string(),
   refresh_token: z.string(),
 })
@@ -48,11 +48,13 @@ export function jwt_payload(token: string) {
   const payload = token.split(".")[1]
   if (!payload) die("bad token")
 
+  let data: unknown
   try {
-    return JwtPayloadSchema.parse(JSON.parse(Buffer.from(payload, "base64url").toString()))
+    data = JSON.parse(Buffer.from(payload, "base64url").toString())
   } catch {
     die("bad token")
   }
+  return zparse(jwt_payload_schema, data, "bad token")
 }
 
 export async function load_session(): Promise<Session | null> {
@@ -64,10 +66,7 @@ export async function load_session(): Promise<Session | null> {
     throw err
   }
 
-  const parsed = CredsSchema.safeParse(raw)
-  if (!parsed.success) die("bad session")
-
-  let creds = parsed.data
+  let creds = zparse(creds_schema, raw, "bad session")
   const now = Math.floor(Date.now() / 1000)
   if (jwt_payload(creds.access_token).exp - now < 60) {
     const refreshed = await refresh_session(creds.refresh_token)
@@ -81,7 +80,7 @@ export async function load_session(): Promise<Session | null> {
 }
 
 async function refresh_session(refresh_token: string) {
-  const res = await fetch_with_timeout(`${supabase_url}/auth/v1/token?grant_type=refresh_token`, {
+  const res = await kfetch(`${supabase_url}/auth/v1/token?grant_type=refresh_token`, {
     method: "POST",
     headers: { apikey: supabase_anon_key, "content-type": "application/json" },
     body: JSON.stringify({ refresh_token }),
@@ -90,7 +89,7 @@ async function refresh_session(refresh_token: string) {
 
   if (res.status === 400 || res.status === 401) return null
   if (!res.ok) die(`refresh failed: ${res.status}`)
-  return RefreshResponseSchema.parse(await res.json())
+  return zparse(refresh_response_schema, await res.json(), "bad refresh response")
 }
 
 function is_enoent(err: unknown) {

@@ -7,7 +7,7 @@ const content_part = z.discriminatedUnion("type", [
   z.object({ type: z.literal("input_file"), file_url: z.string() }),
 ])
 
-export const Request = z.object({
+export const request = z.object({
   model: z.literal("seed-2-0-lite-260228"),
   input: z.array(z.object({
     role: z.literal("user"),
@@ -16,7 +16,7 @@ export const Request = z.object({
   stream: z.boolean().optional(),
 })
 
-export const MessageOutput = z.object({
+const message_output = z.object({
   type: z.literal("message"),
   role: z.literal("assistant"),
   content: z.array(z.object({
@@ -25,14 +25,22 @@ export const MessageOutput = z.object({
   })).min(1),
 })
 
-export const Response = z.object({
+const reasoning_output = z.object({
+  type: z.literal("reasoning"),
+}).loose()
+
+const output_item = z.discriminatedUnion("type", [message_output, reasoning_output])
+
+export const response = z.object({
   id: z.string(),
   object: z.literal("response"),
   status: z.string(),
-  output: z.array(z.looseObject({ type: z.string() })).min(1),
+  output: z.array(output_item).min(1),
   usage: z.object({
     input_tokens: z.number(),
     output_tokens: z.number(),
     total_tokens: z.number(),
   }).optional(),
 })
+
+export type Message = z.infer<typeof message_output>

@@ -3,7 +3,10 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/gpt_image_2.js"
-import { invoke, pg_get, pg_insert, upload_image } from "../../lib/supabase.js"
+import { type Session } from "../../lib/session.js"
+import { submit } from "../../lib/submit.js"
+import { upload_image } from "../../lib/supabase.js"
+import { zparse } from "../../lib/util.js"
 import { get_session } from "../session.js"
 
 const size_presets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
@@ -12,7 +15,9 @@ const min_pixels = 655_360
 const max_pixels = 8_294_400
 const max_edge = 3840
 
-export function register_gpt_image_2(program: Command) {
+type Opts = { output?: string; image?: string[]; mask?: string; size?: string }
+
+export function register(program: Command) {
   program.command("gpt-image-2")
     .description("generate or edit an image with openai gpt-image-2")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
@@ -32,12 +37,19 @@ examples:
     .action(run)
 }
 
-async function run(prompt_arg: string, opts: { output?: string; image?: string[]; mask?: string; size?: string }) {
+async function run(prompt_arg: string, opts: Opts) {
+  const sess = await get_session()
+  const payload = await parse_opts(sess, prompt_arg, opts)
+  const endpoint = payload.images?.length ? "openai:image_edits" : "openai:image_generations"
+  const { result } = await submit(sess, endpoint, payload, "generating image...", 300_000)
+  await save(result, opts.output ?? null)
+}
+
+async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
   const images = opts.image ?? []
   if (opts.mask && images.length === 0) die("--mask requires -i")
 
-  const sess = await get_session()
   const image_urls: string[] = []
   for (const img of images) {
     console.log(`uploading ${img}...`)
@@ -60,27 +72,11 @@ async function run(prompt_arg: string, opts: { output?: string; image?: string[]
   if (image_urls.length > 0) payload.images = image_urls.map((url) => ({ image_url: url }))
   if (mask_url) payload.mask = { image_url: mask_url }
 
-  const task_id = crypto.randomUUID()
-  console.log(`task_id: ${task_id}`)
-  await pg_insert(sess, "task2", {
-    id: task_id,
-    user_id: sess.user_id,
-    endpoint: image_urls.length > 0 ? "openai:image_edits" : "openai:image_generations",
-    payload: schema.Request.parse(payload),
-  })
-
-  console.log("generating image...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, 300_000)
-  if (!submit_res.ok) die(submit_res.err)
-
-  const done = await pg_get(sess, "task2", "result, err", task_id)
-  if (!done) die(`task disappeared: ${task_id}`)
-  if (done.err) die(done.err)
-  await save_gpt_image_2_result(done.result, opts.output ?? null)
+  return zparse(schema.request, payload, "bad gpt-image-2 payload")
 }
 
-export async function save_gpt_image_2_result(result: unknown, output: string | null) {
-  const item = schema.Response.parse(result).data[0]!
+export async function save(result: unknown, output: string | null) {
+  const item = zparse(schema.response, result, "bad gpt-image-2 response").data[0]!
   await save_media(item.url, output, "gpt-image-2")
 }
 

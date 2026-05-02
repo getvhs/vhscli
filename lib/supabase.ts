@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { readFile, rm } from "node:fs/promises"
 import { fileTypeFromFile } from "file-type"
 import { die } from "./error.js"
-import { fetch_with_timeout } from "./http.js"
+import { kfetch } from "./util.js"
 import { run_process } from "./process.js"
 import { supabase_anon_key, supabase_url, type Session } from "./session.js"
 
@@ -14,7 +14,7 @@ function auth_headers(sess: Session) {
 }
 
 export async function invoke(sess: Session, fn: string, body: Record<string, unknown>, timeout_ms: number): Promise<any> {
-  const res = await fetch_with_timeout(`${supabase_url}/functions/v1/${fn}`, {
+  const res = await kfetch(`${supabase_url}/functions/v1/${fn}`, {
     method: "POST",
     headers: { ...auth_headers(sess), "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -26,7 +26,7 @@ export async function invoke(sess: Session, fn: string, body: Record<string, unk
 }
 
 export async function pg_insert(sess: Session, table: string, row: Record<string, unknown>) {
-  const res = await fetch_with_timeout(`${supabase_url}/rest/v1/${table}`, {
+  const res = await kfetch(`${supabase_url}/rest/v1/${table}`, {
     method: "POST",
     headers: { ...auth_headers(sess), "content-type": "application/json", Prefer: "return=minimal" },
     body: JSON.stringify(row),
@@ -42,7 +42,7 @@ export async function pg_get(sess: Session, table: string, select: string, id: s
   url.searchParams.set("id", `eq.${id}`)
   url.searchParams.set("limit", "1")
 
-  const res = await fetch_with_timeout(url, { headers: auth_headers(sess), timeout_ms: 15_000 })
+  const res = await kfetch(url, { headers: auth_headers(sess), timeout_ms: 15_000 })
   if (!res.ok) die(`query failed: ${res.status} ${await res.text()}`)
 
   const rows = await res.json()
@@ -56,7 +56,7 @@ export async function upload_file(sess: Session, path: string, content_type?: st
   const remote_path = `${sess.user_id}/${hash}`
   const type = content_type ?? await detect_mime(path)
 
-  const res = await fetch_with_timeout(`${supabase_url}/storage/v1/object/tmp/${remote_path}`, {
+  const res = await kfetch(`${supabase_url}/storage/v1/object/tmp/${remote_path}`, {
     method: "POST",
     headers: { ...auth_headers(sess), "content-type": type },
     body: data,

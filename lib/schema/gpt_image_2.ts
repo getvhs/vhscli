@@ -2,7 +2,7 @@ import { z } from "zod"
 
 const image_ref = z.object({ image_url: z.string() })
 
-export const Request = z.object({
+export const request = z.object({
   model: z.literal("gpt-image-2"),
   prompt: z.string(),
   images: z.array(image_ref).optional(),
@@ -17,7 +17,7 @@ const token_details = z.object({
   image_tokens: z.number(),
 })
 
-export const Response = z.looseObject({
+export const response = z.looseObject({
   created: z.number().optional(),
   output_format: z.string().optional(),
   quality: z.string().optional(),

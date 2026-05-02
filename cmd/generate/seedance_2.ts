@@ -1,10 +1,17 @@
 import { Command, InvalidArgumentError, Option } from "commander"
+import { z } from "zod"
 import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
-import { invoke, pg_get, pg_insert, upload_file, upload_image } from "../../lib/supabase.js"
+import { type Session } from "../../lib/session.js"
+import { submit } from "../../lib/submit.js"
+import { pg_get, upload_file, upload_image } from "../../lib/supabase.js"
+import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
+import { zparse } from "../../lib/util.js"
 import { get_session } from "../session.js"
+
+type Payload = z.infer<typeof schema.request>
 
 const ratios = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"]
 const resolutions = ["480p", "720p", "1080p"]
@@ -23,7 +30,7 @@ type Opts = {
   seed?: number
 }
 
-export function register_seedance_2(program: Command) {
+export function register(program: Command) {
   program.command("seedance-2")
     .description("generate a video with seedance 2.0")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
@@ -51,6 +58,13 @@ examples:
 }
 
 async function run(prompt_arg: string, opts: Opts) {
+  const sess = await get_session()
+  const payload = await parse_opts(sess, prompt_arg, opts)
+  const { task_id } = await submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
+  await save(sess, task_id, payload, opts.output ?? null)
+}
+
+async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
   const images = opts.image ?? []
   const videos = opts.video ?? []
@@ -63,7 +77,6 @@ async function run(prompt_arg: string, opts: Opts) {
   if (videos.length > 3) die("-v accepts at most 3 videos")
   if (audios.length > 3) die("-a accepts at most 3 audios")
 
-  const sess = await get_session()
   const content: Record<string, unknown>[] = [{ type: "text", text: prompt }]
   const upload_img = async (path: string) => {
     console.log(`uploading ${path}...`)
@@ -90,45 +103,42 @@ async function run(prompt_arg: string, opts: Opts) {
   if (opts.silent) payload.generate_audio = false
   if (opts.seed != null) payload.seed = opts.seed
 
-  const task_id = crypto.randomUUID()
-  console.log(`task_id: ${task_id}`)
-  await pg_insert(sess, "task2", {
-    id: task_id,
-    user_id: sess.user_id,
-    endpoint: "byteplus:seedance-2-0",
-    payload: schema.Request.parse(payload),
-  })
+  return zparse(schema.request, payload, "bad seedance-2 payload")
+}
 
-  process.stdout.write("generating video...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, 20_000)
-  if (!submit_res.ok) {
-    process.stdout.write("\n")
-    die(submit_res.err)
-  }
-
+export async function save(sess: Session, task_id: string, payload: Payload, output: string | null) {
+  let dotted = false
   while (true) {
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    process.stdout.write(".")
     const data = await pg_get(sess, "task2", "result, err", task_id)
     if (!data) {
-      process.stdout.write("\n")
+      if (dotted) process.stdout.write("\n")
       die(`task disappeared: ${task_id}`)
     }
     if (data.err) {
-      process.stdout.write("\n")
+      if (dotted) process.stdout.write("\n")
+      if (await try_t3_fallback(sess, payload, data.err, output)) return
       die(data.err)
     }
     if (data.result) {
-      process.stdout.write("\n")
-      await save_seedance_2_result(data.result, opts.output ?? null)
+      if (dotted) process.stdout.write("\n")
+      const url = zparse(schema.response, data.result, "bad seedance-2 response").content.video_url
+      await save_media(url, output, "seedance-2")
       return
     }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    process.stdout.write(".")
+    dotted = true
   }
 }
 
-export async function save_seedance_2_result(result: unknown, output: string | null) {
-  const url = schema.Response.parse(result).content.video_url
-  await save_media(url, output, "seedance-2")
+async function try_t3_fallback(sess: Session, payload: Payload, err: string, output: string | null): Promise<boolean> {
+  const has_images = payload.content.some((c) => c.type === "image_url")
+  if (!has_images || !err.includes("InputImageSensitiveContentDetected.PrivacyInformation")) return false
+  console.log("input image contains a real face; falling back to t3-seedance-2 with face referencing...")
+  const t3_payload = await translate_seedance_2_to_t3(sess, payload)
+  const t3_result = await submit_and_poll_t3(sess, t3_payload)
+  await save_t3_seedance_2_result(t3_result, output)
+  return true
 }
 
 function parse_duration(value: string) {
