@@ -9,8 +9,11 @@ import { invoke, pg_get, pg_insert } from "./supabase.js"
 import { submit_response } from "./submit.js"
 import { zparse } from "./util.js"
 
+// server returns the upstream provider's id under its native name; alias it
+// to asset_id so the rest of the cli stays vendor-agnostic.
 const new_asset_response = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), token360_asset_id: z.string() }),
+  z.object({ ok: z.literal(true), token360_asset_id: z.string() })
+    .transform((r) => ({ ok: true as const, asset_id: r.token360_asset_id })),
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
 
@@ -22,7 +25,7 @@ export const poll_response = z.discriminatedUnion("ok", [
 export async function new_asset(sess: Session, image_url: string): Promise<string> {
   const res = await invoke(sess, "t3/new_asset", { image_url }, new_asset_response, 90_000)
   if (!res.ok) die(`t3/new_asset: ${res.err}`)
-  return res.token360_asset_id
+  return res.asset_id
 }
 
 export async function submit_and_poll_t3(sess: Session, payload: Record<string, unknown>): Promise<unknown> {
@@ -88,7 +91,7 @@ export async function translate_seedance_2_to_t3(sess: Session, payload: z.infer
     if (c.type === "text") continue
     if (c.type === "audio_url") die("audio references can't translate to t3-seedance-2; remove -a and retry")
     if (c.type === "image_url") {
-      console.log(`creating token360 asset from ${c.image_url.url}...`)
+      console.log(`creating t3 asset from ${c.image_url.url}...`)
       const asset_id = await new_asset(sess, c.image_url.url)
       const url = `asset://${asset_id}`
       if (c.role === "first_frame" || c.role === "last_frame") {

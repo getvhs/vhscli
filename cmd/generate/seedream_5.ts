@@ -38,7 +38,8 @@ examples:
 async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const { result } = await submit(sess, "byteplus:seedream-5-0", payload, "generating image...", 300_000)
+  const { result, err } = await submit(sess, "byteplus:seedream-5-0", payload, "generating image...", 300_000)
+  if (err) die(err)
   await save(result, opts.output ?? null)
 }
 

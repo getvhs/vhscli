@@ -61,8 +61,18 @@ examples:
 async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const { task_id } = await submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
-  await save(sess, task_id, payload, opts.output ?? null)
+  const output = opts.output ?? null
+  const { task_id, err } = await submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
+  // byteplus can reject synchronously (e.g. real-face filter); the async
+  // callback path also surfaces err in save() below.
+  if (err) {
+    if (should_t3_fallback(payload, err)) {
+      await run_t3_fallback(sess, payload, output)
+      return
+    }
+    die(err)
+  }
+  await save(sess, task_id, payload, output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
