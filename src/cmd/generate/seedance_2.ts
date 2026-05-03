@@ -119,7 +119,7 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
 }
 
 export async function save(sess: Session, task_id: string, output: string | null) {
-  let elapsed = 0
+  const start = Date.now()
   while (true) {
     const row = await get_task(sess, task_id)
     if (!row) die(`task disappeared: ${task_id}`)
@@ -130,10 +130,7 @@ export async function save(sess: Session, task_id: string, output: string | null
       return
     }
     const res = await backend.poll(sess, task_id)
-    if (!res.is_completed) {
-      elapsed += 40
-      console.log(`polling... ${elapsed}s`)
-    }
+    if (!res.is_completed) console.log(`polling... ${Math.round((Date.now() - start) / 1000)}s`)
   }
 }
 

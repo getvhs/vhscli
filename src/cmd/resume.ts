@@ -29,7 +29,7 @@ examples:
 
 async function run(task_id: string, opts: { output?: string }) {
   const sess = await get_session()
-  let elapsed = 0
+  const start = Date.now()
   while (true) {
     const row = await get_task(sess, task_id)
     if (!row) die(`task not found: ${task_id}`)
@@ -39,14 +39,11 @@ async function run(task_id: string, opts: { output?: string }) {
       await save_result(sess, task_id, row.endpoint, row.result, opts.output ?? null)
       return
     }
-    // both endpoints block up to 40s; poll/t3 also drives the upstream poller.
+    // both endpoints long-poll; poll/t3 also drives the upstream poller.
     const res = row.endpoint === "t3:seedance2"
       ? await backend.poll_t3(sess, task_id)
       : await backend.poll(sess, task_id)
-    if (!res.is_completed) {
-      elapsed += 40
-      console.log(`polling... ${elapsed}s`)
-    }
+    if (!res.is_completed) console.log(`polling... ${Math.round((Date.now() - start) / 1000)}s`)
   }
 }
 

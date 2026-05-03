@@ -23,12 +23,11 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
     die(e.code ? `${e.code}: ${e.message}` : e.message)
   }
 
-  let elapsed = 0
+  const start = Date.now()
   while (true) {
     const poll_res = await backend.poll_t3(sess, task_id)
     if (poll_res.is_completed) break
-    elapsed += 40
-    console.log(`polling... ${elapsed}s`)
+    console.log(`polling... ${Math.round((Date.now() - start) / 1000)}s`)
   }
 
   const row = await get_task(sess, task_id)
