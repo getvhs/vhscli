@@ -1,23 +1,17 @@
 import { z } from "zod"
 import * as backend from "./backend.js"
+import { get_task, insert_task } from "./db.js"
 import { die } from "./error.js"
 import { save_media } from "./media.js"
 import * as seedance_schema from "./schema/seedance_2.js"
 import * as schema from "./schema/t3_seedance_2.js"
-import { task2 } from "./schema/task2.js"
 import { type Session } from "./session.js"
-import { pg_get, pg_insert } from "./supabase.js"
 import { zparse } from "./util.js"
 
 export async function submit_and_poll_t3(sess: Session, payload: Record<string, unknown>): Promise<unknown> {
   const task_id = crypto.randomUUID()
   console.log(`task_id: ${task_id}`)
-  await pg_insert(sess, "task2", {
-    id: task_id,
-    user_id: sess.user_id,
-    endpoint: "t3:seedance2",
-    payload: zparse(schema.request, payload, "bad t3-seedance-2 payload"),
-  })
+  await insert_task(sess, task_id, "t3:seedance2", zparse(schema.request, payload, "bad t3-seedance-2 payload"))
 
   process.stdout.write("generating video...")
   const submit_res = await backend.submit(sess, task_id, 90_000)
@@ -40,9 +34,8 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
   }
   process.stdout.write("\n")
 
-  const data = await pg_get(sess, "task2", "result, err", task_id)
-  if (!data) die(`task disappeared: ${task_id}`)
-  const row = zparse(task2, data, "bad task2 row")
+  const row = await get_task(sess, task_id)
+  if (!row) die(`task disappeared: ${task_id}`)
   if (row.err) die(row.err)
   if (!row.result) die("task completed without result")
   return row.result

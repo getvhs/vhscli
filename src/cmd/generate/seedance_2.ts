@@ -4,10 +4,10 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
-import { task2 } from "../../lib/schema/task2.js"
 import { type Session } from "../../lib/session.js"
+import { get_task } from "../../lib/db.js"
 import { submit } from "../../lib/submit.js"
-import { pg_get, upload_file, upload_image } from "../../lib/supabase.js"
+import { upload_file, upload_image } from "../../lib/supabase.js"
 import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
 import { zparse } from "../../lib/util.js"
 import { get_session } from "../session.js"
@@ -63,8 +63,8 @@ async function run(prompt_arg: string, opts: Opts) {
   const payload = await parse_opts(sess, prompt_arg, opts)
   const output = opts.output ?? null
   const { task_id, err } = await submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
-  // byteplus can reject synchronously (e.g. real-face filter); the async
-  // callback path also surfaces err in save() below.
+  // byteplus rejects real-face content sync at submit time; fall back once.
+  // an async err surfacing later in save() is fatal — no fallback there.
   if (err) {
     if (should_t3_fallback(payload, err)) {
       await run_t3_fallback(sess, payload, output)
@@ -72,7 +72,7 @@ async function run(prompt_arg: string, opts: Opts) {
     }
     die(err)
   }
-  await save(sess, task_id, payload, output)
+  await save(sess, task_id, output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
@@ -117,22 +117,17 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   return zparse(schema.request, payload, "bad seedance-2 payload")
 }
 
-export async function save(sess: Session, task_id: string, payload: Payload, output: string | null) {
+export async function save(sess: Session, task_id: string, output: string | null) {
   let dotted = false
   const finish_dots = () => { if (dotted) process.stdout.write("\n") }
   while (true) {
-    const data = await pg_get(sess, "task2", "result, err", task_id)
-    if (!data) {
+    const row = await get_task(sess, task_id)
+    if (!row) {
       finish_dots()
       die(`task disappeared: ${task_id}`)
     }
-    const row = zparse(task2, data, "bad task2 row")
     if (row.err) {
       finish_dots()
-      if (should_t3_fallback(payload, row.err)) {
-        await run_t3_fallback(sess, payload, output)
-        return
-      }
       die(row.err)
     }
     if (row.result) {

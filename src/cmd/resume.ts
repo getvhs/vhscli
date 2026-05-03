@@ -1,11 +1,8 @@
 import { Command } from "commander"
 import * as backend from "../lib/backend.js"
+import { get_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
-import * as seedance_schema from "../lib/schema/seedance_2.js"
-import { task2 } from "../lib/schema/task2.js"
 import { type Session } from "../lib/session.js"
-import { pg_get } from "../lib/supabase.js"
-import { zparse } from "../lib/util.js"
 import * as gpt_image_2 from "./generate/gpt_image_2.js"
 import * as nano_banana_2 from "./generate/nano_banana_2.js"
 import * as nano_banana_pro from "./generate/nano_banana_pro.js"
@@ -34,13 +31,12 @@ examples:
 async function run(task_id: string, opts: { output?: string }) {
   const sess = await get_session()
   while (true) {
-    const data = await pg_get(sess, "task2", "endpoint, payload, result, err", task_id)
-    if (!data) die(`task not found: ${task_id}`)
-    const row = zparse(task2, data, "bad task2 row")
+    const row = await get_task(sess, task_id)
+    if (!row) die(`task not found: ${task_id}`)
     if (row.err) die(row.err)
     if (row.result) {
       if (!row.endpoint) die("task has no endpoint")
-      await save_result(sess, task_id, row.endpoint, row.payload, row.result, opts.output ?? null)
+      await save_result(sess, task_id, row.endpoint, row.result, opts.output ?? null)
       return
     }
     if (row.endpoint === "t3:seedance2") {
@@ -52,9 +48,9 @@ async function run(task_id: string, opts: { output?: string }) {
   }
 }
 
-async function save_result(sess: Session, task_id: string, endpoint: string, payload: unknown, result: unknown, output: string | null) {
+async function save_result(sess: Session, task_id: string, endpoint: string, result: unknown, output: string | null) {
   switch (endpoint) {
-    case "byteplus:seedance-2-0": return seedance_2.save(sess, task_id, zparse(seedance_schema.request, payload, "bad seedance-2 payload"), output)
+    case "byteplus:seedance-2-0": return seedance_2.save(sess, task_id, output)
     case "t3:seedance2": return save_t3_seedance_2_result(result, output)
     case "byteplus:seedream-4-5": return seedream_4_5.save(result, output)
     case "byteplus:seedream-5-0": return seedream_5.save(result, output)

@@ -18,6 +18,13 @@ export type Session = {
   email?: string
 }
 
+export function auth_headers(sess: Session) {
+  return {
+    apikey: supabase_anon_key,
+    authorization: `Bearer ${sess.access_token}`,
+  }
+}
+
 export const creds = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
