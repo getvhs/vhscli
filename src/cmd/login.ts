@@ -1,17 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { z } from "zod"
+import * as backend from "../lib/backend.js"
 import { die } from "../lib/error.js"
 import { creds, jwt_payload, save_creds, supabase_url, type Session } from "../lib/session.js"
 import { open_browser } from "../lib/process.js"
-import { invoke } from "../lib/supabase.js"
 import { zparse } from "../lib/util.js"
 
 type Creds = z.infer<typeof creds>
-
-const bootstrap_response = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), account_id: z.string(), is_new: z.boolean() }),
-  z.object({ ok: z.literal(false), err: z.string() }),
-])
 
 const callback_html = `<!DOCTYPE html><html><body><script>
 const h = new URLSearchParams(location.hash.slice(1));
@@ -64,8 +59,7 @@ export async function login() {
 
   const payload = jwt_payload(result.access_token)
   const sess: Session = { access_token: result.access_token, user_id: payload.sub, email: payload.email }
-  const boot = await invoke(sess, "main2/bootstrap", {}, bootstrap_response, 30_000)
-  if (!boot.ok) die(`bootstrap failed: ${boot.err}`)
+  await backend.bootstrap(sess)
 
   console.log("authenticated")
 }

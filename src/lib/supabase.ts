@@ -2,12 +2,10 @@ import { createHash } from "node:crypto"
 import { readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
-import { z } from "zod"
 import { fileTypeFromFile } from "file-type"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
 import { run_process } from "./process.js"
-import { zparse } from "./util.js"
 import { supabase_anon_key, supabase_url, type Session } from "./session.js"
 
 function auth_headers(sess: Session) {
@@ -15,24 +13,6 @@ function auth_headers(sess: Session) {
     apikey: supabase_anon_key,
     authorization: `Bearer ${sess.access_token}`,
   }
-}
-
-export async function invoke<T extends z.ZodType>(
-  sess: Session,
-  fn: string,
-  body: Record<string, unknown>,
-  schema: T,
-  timeout_ms: number,
-): Promise<z.infer<T>> {
-  const res = await kfetch(`${supabase_url}/functions/v1/${fn}`, {
-    method: "POST",
-    headers: { ...auth_headers(sess), "content-type": "application/json" },
-    body: JSON.stringify(body),
-    timeout_ms,
-  })
-
-  if (!res.ok) die(`edge function error: ${res.status} ${await res.text()}`)
-  return zparse(schema, await res.json(), `bad ${fn} response`)
 }
 
 export async function pg_insert(sess: Session, table: string, row: Record<string, unknown>) {

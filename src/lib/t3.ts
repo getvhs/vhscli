@@ -1,32 +1,13 @@
 import { z } from "zod"
+import * as backend from "./backend.js"
 import { die } from "./error.js"
 import { save_media } from "./media.js"
 import * as seedance_schema from "./schema/seedance_2.js"
 import * as schema from "./schema/t3_seedance_2.js"
 import { task2 } from "./schema/task2.js"
 import { type Session } from "./session.js"
-import { invoke, pg_get, pg_insert } from "./supabase.js"
-import { submit_response } from "./submit.js"
+import { pg_get, pg_insert } from "./supabase.js"
 import { zparse } from "./util.js"
-
-// server returns the upstream provider's id under its native name; alias it
-// to asset_id so the rest of the cli stays vendor-agnostic.
-const new_asset_response = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), token360_asset_id: z.string() })
-    .transform((r) => ({ ok: true as const, asset_id: r.token360_asset_id })),
-  z.object({ ok: z.literal(false), err: z.string() }),
-])
-
-export const poll_response = z.discriminatedUnion("ok", [
-  z.looseObject({ ok: z.literal(true), is_completed: z.boolean().optional() }),
-  z.object({ ok: z.literal(false), err: z.string() }),
-])
-
-export async function new_asset(sess: Session, image_url: string): Promise<string> {
-  const res = await invoke(sess, "t3/new_asset", { image_url }, new_asset_response, 90_000)
-  if (!res.ok) die(`t3/new_asset: ${res.err}`)
-  return res.asset_id
-}
 
 export async function submit_and_poll_t3(sess: Session, payload: Record<string, unknown>): Promise<unknown> {
   const task_id = crypto.randomUUID()
@@ -39,7 +20,7 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
   })
 
   process.stdout.write("generating video...")
-  const submit_res = await invoke(sess, "main2/submit", { task_id }, submit_response, 90_000)
+  const submit_res = await backend.submit(sess, task_id, 90_000)
   if (!submit_res.ok) {
     process.stdout.write("\n")
     die(submit_res.err)
@@ -54,11 +35,7 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
 
   while (true) {
     process.stdout.write(".")
-    const poll_res = await invoke(sess, "main2/poll/t3", { task_id }, poll_response, 60_000)
-    if (!poll_res.ok) {
-      process.stdout.write("\n")
-      die(poll_res.err)
-    }
+    const poll_res = await backend.poll_t3(sess, task_id)
     if (poll_res.is_completed) break
   }
   process.stdout.write("\n")
@@ -92,7 +69,7 @@ export async function translate_seedance_2_to_t3(sess: Session, payload: z.infer
     if (c.type === "audio_url") die("audio references can't translate to t3-seedance-2; remove -a and retry")
     if (c.type === "image_url") {
       console.log(`creating t3 asset from ${c.image_url.url}...`)
-      const asset_id = await new_asset(sess, c.image_url.url)
+      const { asset_id } = await backend.new_asset(sess, c.image_url.url)
       const url = `asset://${asset_id}`
       if (c.role === "first_frame" || c.role === "last_frame") {
         frame_images.push({ type: "image_url", frame_type: c.role, image_url: { url } })
