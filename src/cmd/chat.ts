@@ -3,11 +3,10 @@ import { die } from "../lib/error.js"
 import { read_prompt } from "../lib/prompt.js"
 import * as schema from "../lib/schema/seed_lite.js"
 import { upload_image } from "../lib/media.js"
-import { type Session } from "../lib/session.js"
+import { get_session, type Session } from "../lib/session.js"
 import { upload_file } from "../lib/storage.js"
 import { kparse } from "../lib/parse.js"
 import { create_and_submit } from "../lib/task.js"
-import { get_session } from "./session.js"
 
 type Opts = { image?: string[]; file?: string[]; video?: string; fps?: number }
 

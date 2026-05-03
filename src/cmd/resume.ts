@@ -2,7 +2,7 @@ import { Command } from "commander"
 import * as backend from "../lib/backend.js"
 import { get_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
-import { type Session } from "../lib/session.js"
+import { get_session, type Session } from "../lib/session.js"
 import * as gpt_image_2 from "./generate/gpt_image_2.js"
 import * as nano_banana_2 from "./generate/nano_banana_2.js"
 import * as nano_banana_pro from "./generate/nano_banana_pro.js"
@@ -10,7 +10,6 @@ import * as seedance_2 from "./generate/seedance_2.js"
 import * as seedream_4_5 from "./generate/seedream_4_5.js"
 import * as seedream_5 from "./generate/seedream_5.js"
 import { save_t3_seedance_2_result } from "../lib/t3.js"
-import { get_session } from "./session.js"
 
 export function register_resume(program: Command) {
   program.command("resume")

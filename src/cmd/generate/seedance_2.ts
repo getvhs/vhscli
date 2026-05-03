@@ -4,14 +4,13 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
-import { type Session } from "../../lib/session.js"
+import { get_session, type Session } from "../../lib/session.js"
 import { get_task } from "../../lib/db.js"
 import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
 import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
 import { kparse } from "../../lib/parse.js"
-import { get_session } from "../session.js"
 
 type Payload = z.infer<typeof schema.request>
 

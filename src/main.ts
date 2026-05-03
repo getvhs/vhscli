@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { Command } from "commander"
-import { login } from "./cmd/login.js"
 import { register_chat } from "./cmd/chat.js"
 import * as gpt_image_2 from "./cmd/generate/gpt_image_2.js"
 import * as nano_banana_2 from "./cmd/generate/nano_banana_2.js"
@@ -12,6 +11,7 @@ import { logout } from "./cmd/logout.js"
 import { models } from "./cmd/models.js"
 import { register_resume } from "./cmd/resume.js"
 import { whoami } from "./cmd/whoami.js"
+import { login } from "./lib/session.js"
 import { VERSION } from "./version.js"
 
 const help_after = `

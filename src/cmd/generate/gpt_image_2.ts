@@ -3,11 +3,10 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/gpt_image_2.js"
-import { type Session } from "../../lib/session.js"
+import { get_session, type Session } from "../../lib/session.js"
 import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
-import { get_session } from "../session.js"
 
 const size_presets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
 const ext_format: Record<string, "png" | "jpeg" | "webp"> = { png: "png", jpg: "jpeg", jpeg: "jpeg", webp: "webp" }

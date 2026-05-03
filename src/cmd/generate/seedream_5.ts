@@ -3,11 +3,10 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedream.js"
-import { type Session } from "../../lib/session.js"
+import { get_session, type Session } from "../../lib/session.js"
 import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
-import { get_session } from "../session.js"
 
 const sizes = ["2K", "3K"] as const
 const min_pixels = 3_686_400

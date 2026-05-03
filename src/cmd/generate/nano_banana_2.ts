@@ -3,11 +3,10 @@ import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/nano_banana.js"
-import { type Session } from "../../lib/session.js"
+import { get_session, type Session } from "../../lib/session.js"
 import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
-import { get_session } from "../session.js"
 
 const ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
 const sizes = ["512", "1K", "2K", "4K"]
