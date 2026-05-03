@@ -4,7 +4,7 @@ import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/nano_banana.js"
 import { type Session } from "../../lib/session.js"
-import { submit } from "../../lib/task.js"
+import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
 import { get_session } from "../session.js"
@@ -49,7 +49,7 @@ examples:
 async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const sub = await submit(sess, "google:nano_banana_2", payload, "generating image...", 300_000)
+  const sub = await create_and_submit(sess, "google:nano_banana_2", payload, "generating image...", 300_000)
   if (!sub.ok) die(sub.err)
   await save(sub.result, opts.output ?? null)
 }

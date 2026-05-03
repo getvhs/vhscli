@@ -2,9 +2,7 @@ import * as backend from "./backend.js"
 import { insert_task } from "./db.js"
 import { type Session } from "./session.js"
 
-// returns the discriminated backend response (caller branches on .ok) plus
-// the task_id we minted; seedance inspects the err to decide on t3 fallback.
-export async function submit(
+export async function create_and_submit(
   sess: Session,
   endpoint: string,
   payload: Record<string, unknown>,

@@ -1,13 +1,15 @@
 import { Command, InvalidArgumentError } from "commander"
-import * as backend from "../lib/backend.js"
-import { insert_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
 import { read_prompt } from "../lib/prompt.js"
 import * as schema from "../lib/schema/seed_lite.js"
 import { upload_image } from "../lib/media.js"
+import { type Session } from "../lib/session.js"
 import { upload_file } from "../lib/storage.js"
 import { kparse } from "../lib/parse.js"
+import { create_and_submit } from "../lib/task.js"
 import { get_session } from "./session.js"
+
+type Opts = { image?: string[]; file?: string[]; video?: string; fps?: number }
 
 export function register_chat(program: Command) {
   program.command("chat")
@@ -28,9 +30,21 @@ examples:
     .action(run)
 }
 
-async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]; video?: string; fps?: number }) {
-  const prompt = await read_prompt(prompt_arg)
+async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
+  const payload = await parse_opts(sess, prompt_arg, opts)
+
+  const sub = await create_and_submit(sess, "byteplus:seed-2-0-lite", payload, "thinking...", 60_000)
+  if (!sub.ok) die(sub.err)
+
+  const result = kparse(schema.response, sub.result, "bad chat response")
+  const message = result.output.find((o): o is schema.Message => o.type === "message")
+  if (!message) die("no message in chat response")
+  console.log(message.content[0]!.text)
+}
+
+async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
+  const prompt = await read_prompt(prompt_arg)
 
   const image_urls: string[] = []
   for (const img of opts.image ?? []) {
@@ -56,20 +70,11 @@ async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]
   if (video_url) content.push({ type: "input_video", video_url, fps: opts.fps ?? 1 })
   content.push({ type: "input_text", text: prompt })
 
-  const task_id = crypto.randomUUID()
-  await insert_task(sess, task_id, "byteplus:seed-2-0-lite", kparse(schema.request, {
+  return kparse(schema.request, {
     model: "seed-2-0-lite-260228",
     input: [{ role: "user", content }],
     stream: false,
-  }, "bad chat payload"))
-
-  const submit_res = await backend.submit(sess, task_id, 60_000)
-  if (!submit_res.ok) die(submit_res.err)
-
-  const result = kparse(schema.response, submit_res.result, "bad chat response")
-  const message = result.output.find((o): o is schema.Message => o.type === "message")
-  if (!message) die("no message in chat response")
-  console.log(message.content[0]!.text)
+  }, "bad chat payload")
 }
 
 function parse_fps(value: string) {
