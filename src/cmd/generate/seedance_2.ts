@@ -6,7 +6,7 @@ import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
 import { type Session } from "../../lib/session.js"
 import { get_task } from "../../lib/db.js"
-import { submit } from "../../lib/submit.js"
+import { submit as create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
 import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
@@ -63,17 +63,17 @@ async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
   const output = opts.output ?? null
-  const { task_id, err } = await submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
+  const sub = await create_and_submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
   // byteplus rejects real-face content sync at submit time; fall back once.
   // an async err surfacing later in save() is fatal — no fallback there.
-  if (err) {
-    if (should_t3_fallback(payload, err)) {
+  if (!sub.ok) {
+    if (should_t3_fallback(payload, sub.err)) {
       await run_t3_fallback(sess, payload, output)
       return
     }
-    die(err)
+    die(sub.err)
   }
-  await save(sess, task_id, output)
+  await save(sess, sub.task_id, output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
