@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { z } from "zod"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
-import { zparse } from "./util.js"
+import { kparse } from "./parse.js"
 
 export const supabase_url = "https://hlraysuoesqgfvowfkav.supabase.co"
 export const supabase_anon_key = "sb_publishable_MhbhQH2mzTf7ZhULB3zvqg_4XqUibrt"
@@ -62,7 +62,7 @@ export function jwt_payload(token: string) {
   } catch {
     die("bad token")
   }
-  return zparse(jwt_payload_schema, data, "bad token")
+  return kparse(jwt_payload_schema, data, "bad token")
 }
 
 export async function load_session(): Promise<Session | null> {
@@ -74,7 +74,7 @@ export async function load_session(): Promise<Session | null> {
     throw err
   }
 
-  let parsed = zparse(creds, raw, "bad session")
+  let parsed = kparse(creds, raw, "bad session")
   const now = Math.floor(Date.now() / 1000)
   if (jwt_payload(parsed.access_token).exp - now < 60) {
     const refreshed = await refresh_session(parsed.refresh_token)
@@ -97,7 +97,7 @@ async function refresh_session(refresh_token: string) {
 
   if (res.status === 400 || res.status === 401) return null
   if (!res.ok) die(`refresh failed: ${res.status}`)
-  return zparse(refresh_response_schema, await res.json(), "bad refresh response")
+  return kparse(refresh_response_schema, await res.json(), "bad refresh response")
 }
 
 function is_enoent(err: unknown) {

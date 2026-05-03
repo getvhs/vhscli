@@ -6,7 +6,7 @@ import * as schema from "../../lib/schema/gpt_image_2.js"
 import { type Session } from "../../lib/session.js"
 import { submit } from "../../lib/submit.js"
 import { upload_image } from "../../lib/media.js"
-import { zparse } from "../../lib/util.js"
+import { kparse } from "../../lib/parse.js"
 import { get_session } from "../session.js"
 
 const size_presets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
@@ -73,11 +73,11 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   if (image_urls.length > 0) payload.images = image_urls.map((url) => ({ image_url: url }))
   if (mask_url) payload.mask = { image_url: mask_url }
 
-  return zparse(schema.request, payload, "bad gpt-image-2 payload")
+  return kparse(schema.request, payload, "bad gpt-image-2 payload")
 }
 
 export async function save(result: unknown, output: string | null) {
-  const item = zparse(schema.response, result, "bad gpt-image-2 response").data[0]!
+  const item = kparse(schema.response, result, "bad gpt-image-2 response").data[0]!
   await save_media(item.url, output, "gpt-image-2")
 }
 

@@ -6,7 +6,7 @@ import * as schema from "../../lib/schema/nano_banana.js"
 import { type Session } from "../../lib/session.js"
 import { submit } from "../../lib/submit.js"
 import { upload_image } from "../../lib/media.js"
-import { zparse } from "../../lib/util.js"
+import { kparse } from "../../lib/parse.js"
 import { get_session } from "../session.js"
 
 const ratios = ["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"]
@@ -82,11 +82,11 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
     payload.tools = [{ googleSearch: { searchTypes: search_types } }]
   }
 
-  return zparse(schema.request, payload, "bad nano-banana-2 payload")
+  return kparse(schema.request, payload, "bad nano-banana-2 payload")
 }
 
 export async function save(result: unknown, output: string | null) {
-  const cand = zparse(schema.response, result, "bad nano-banana-2 response").candidates[0]!
+  const cand = kparse(schema.response, result, "bad nano-banana-2 response").candidates[0]!
   for (const part of cand.content.parts ?? []) {
     if (part.inlineData) {
       await save_media(part.inlineData.url, output, "nano-banana-2")

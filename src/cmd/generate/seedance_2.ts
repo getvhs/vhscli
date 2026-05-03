@@ -10,7 +10,7 @@ import { submit } from "../../lib/submit.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
 import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
-import { zparse } from "../../lib/util.js"
+import { kparse } from "../../lib/parse.js"
 import { get_session } from "../session.js"
 
 type Payload = z.infer<typeof schema.request>
@@ -115,7 +115,7 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   if (opts.silent) payload.generate_audio = false
   if (opts.seed != null) payload.seed = opts.seed
 
-  return zparse(schema.request, payload, "bad seedance-2 payload")
+  return kparse(schema.request, payload, "bad seedance-2 payload")
 }
 
 export async function save(sess: Session, task_id: string, output: string | null) {
@@ -133,7 +133,7 @@ export async function save(sess: Session, task_id: string, output: string | null
     }
     if (row.result) {
       finish_dots()
-      const url = zparse(schema.response, row.result, "bad seedance-2 response").content.video_url
+      const url = kparse(schema.response, row.result, "bad seedance-2 response").content.video_url
       await save_media(url, output, "seedance-2")
       return
     }

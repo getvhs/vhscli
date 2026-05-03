@@ -2,7 +2,7 @@ import { z } from "zod"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
 import { auth_headers, supabase_url, type Session } from "./session.js"
-import { zparse } from "./util.js"
+import { kparse } from "./parse.js"
 
 const jsonb = z.record(z.string(), z.unknown())
 
@@ -56,5 +56,5 @@ async function pg_get<T extends z.ZodType>(
   if (!Array.isArray(rows)) die(`bad ${table} response`)
   const row = rows[0]
   if (row == null) return null
-  return zparse(schema, row, `bad ${table} row`)
+  return kparse(schema, row, `bad ${table} row`)
 }

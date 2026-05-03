@@ -6,7 +6,7 @@ import * as schema from "../../lib/schema/seedream.js"
 import { type Session } from "../../lib/session.js"
 import { submit } from "../../lib/submit.js"
 import { upload_image } from "../../lib/media.js"
-import { zparse } from "../../lib/util.js"
+import { kparse } from "../../lib/parse.js"
 import { get_session } from "../session.js"
 
 const sizes = ["2K", "3K"] as const
@@ -64,11 +64,11 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   else if (image_urls.length > 1) payload.image = image_urls
   if (opts.size) payload.size = opts.size
 
-  return zparse(schema.request, payload, "bad seedream-5 payload")
+  return kparse(schema.request, payload, "bad seedream-5 payload")
 }
 
 export async function save(result: unknown, output: string | null) {
-  const item = zparse(schema.response, result, "bad seedream-5 response").data[0]!
+  const item = kparse(schema.response, result, "bad seedream-5 response").data[0]!
   if (item.error) die(`provider error: ${item.error.message}`)
   if (!item.url) die("no image url")
   await save_media(item.url, output, "seedream-5")

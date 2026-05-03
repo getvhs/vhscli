@@ -4,7 +4,7 @@ import * as backend from "../lib/backend.js"
 import { die } from "../lib/error.js"
 import { creds, jwt_payload, save_creds, supabase_url, type Session } from "../lib/session.js"
 import { open_browser } from "../lib/process.js"
-import { zparse } from "../lib/util.js"
+import { kparse } from "../lib/parse.js"
 
 type Creds = z.infer<typeof creds>
 
@@ -81,7 +81,7 @@ async function handle_request(
     die("bad token: invalid json")
   }
 
-  const data = zparse(creds, raw, "bad token")
+  const data = kparse(creds, raw, "bad token")
   await send(res, 200, "ok")
   resolve(data)
 }

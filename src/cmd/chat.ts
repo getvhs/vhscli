@@ -6,7 +6,7 @@ import { read_prompt } from "../lib/prompt.js"
 import * as schema from "../lib/schema/seed_lite.js"
 import { upload_image } from "../lib/media.js"
 import { upload_file } from "../lib/storage.js"
-import { zparse } from "../lib/util.js"
+import { kparse } from "../lib/parse.js"
 import { get_session } from "./session.js"
 
 export function register_chat(program: Command) {
@@ -57,7 +57,7 @@ async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]
   content.push({ type: "input_text", text: prompt })
 
   const task_id = crypto.randomUUID()
-  await insert_task(sess, task_id, "byteplus:seed-2-0-lite", zparse(schema.request, {
+  await insert_task(sess, task_id, "byteplus:seed-2-0-lite", kparse(schema.request, {
     model: "seed-2-0-lite-260228",
     input: [{ role: "user", content }],
     stream: false,
@@ -66,7 +66,7 @@ async function run(prompt_arg: string, opts: { image?: string[]; file?: string[]
   const submit_res = await backend.submit(sess, task_id, 60_000)
   if (!submit_res.ok) die(submit_res.err)
 
-  const result = zparse(schema.response, submit_res.result, "bad chat response")
+  const result = kparse(schema.response, submit_res.result, "bad chat response")
   const message = result.output.find((o): o is schema.Message => o.type === "message")
   if (!message) die("no message in chat response")
   console.log(message.content[0]!.text)

@@ -2,7 +2,7 @@ import { z } from "zod"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
 import { supabase_anon_key, supabase_url, type Session } from "./session.js"
-import { zparse } from "./util.js"
+import { kparse } from "./parse.js"
 
 // our backend uses rpc over http, not rest. every call either succeeds with
 // `{ok: true, ...}` or fails with `{ok: false, err}`. a non-200 status code
@@ -29,7 +29,7 @@ async function invoke<T extends z.ZodType>(
     timeout_ms,
   })
   if (!res.ok) die(`edge function error: ${res.status} ${await res.text()}`)
-  return zparse(schema, await res.json(), `bad ${fn} response`)
+  return kparse(schema, await res.json(), `bad ${fn} response`)
 }
 
 const bootstrap_response = z.discriminatedUnion("ok", [
@@ -44,7 +44,7 @@ export async function bootstrap(sess: Session) {
 }
 
 const submit_response = z.discriminatedUnion("ok", [
-  z.looseObject({
+  z.object({
     ok: z.literal(true),
     result: z.unknown().optional(),
     intermediate: z.unknown().optional(),
@@ -61,7 +61,7 @@ export async function submit(sess: Session, task_id: string, timeout_ms: number)
 }
 
 const poll_t3_response = z.discriminatedUnion("ok", [
-  z.looseObject({ ok: z.literal(true), is_completed: z.boolean().optional() }),
+  z.object({ ok: z.literal(true), is_completed: z.boolean().optional() }),
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
 

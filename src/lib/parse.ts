@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export function zparse<T extends z.ZodType>(schema: T, value: unknown, message = "schema mismatch"): z.infer<T> {
+export function kparse<T extends z.ZodType>(schema: T, value: unknown, message: string): z.infer<T> {
   const result = schema.safeParse(value)
   if (result.success) return result.data
 

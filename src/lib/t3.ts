@@ -6,12 +6,12 @@ import { save_media } from "./media.js"
 import * as seedance_schema from "./schema/seedance_2.js"
 import * as schema from "./schema/t3_seedance_2.js"
 import { type Session } from "./session.js"
-import { zparse } from "./util.js"
+import { kparse } from "./parse.js"
 
 export async function submit_and_poll_t3(sess: Session, payload: Record<string, unknown>): Promise<unknown> {
   const task_id = crypto.randomUUID()
   console.log(`task_id: ${task_id}`)
-  await insert_task(sess, task_id, "t3:seedance2", zparse(schema.request, payload, "bad t3-seedance-2 payload"))
+  await insert_task(sess, task_id, "t3:seedance2", kparse(schema.request, payload, "bad t3-seedance-2 payload"))
 
   process.stdout.write("generating video...")
   const submit_res = await backend.submit(sess, task_id, 90_000)
@@ -20,7 +20,7 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
     die(submit_res.err)
   }
 
-  const intermediate = zparse(schema.intermediate, submit_res.intermediate, "bad submit response")
+  const intermediate = kparse(schema.intermediate, submit_res.intermediate, "bad submit response")
   if (intermediate.error) {
     process.stdout.write("\n")
     const e = intermediate.error
@@ -42,7 +42,7 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
 }
 
 export async function save_t3_seedance_2_result(result: unknown, output: string | null) {
-  const url = zparse(schema.response, result, "bad t3-seedance-2 response").url
+  const url = kparse(schema.response, result, "bad t3-seedance-2 response").url
   await save_media(url, output, "t3-seedance-2")
 }
 
