@@ -1,6 +1,6 @@
 import { rename, unlink, writeFile } from "node:fs/promises"
 import { die } from "./error.js"
-import { kfetch } from "./util.js"
+import { kfetch } from "./http.js"
 import { run_process } from "./process.js"
 
 const mime_ext: Record<string, string> = {

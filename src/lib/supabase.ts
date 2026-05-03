@@ -5,8 +5,9 @@ import { basename, join } from "node:path"
 import { z } from "zod"
 import { fileTypeFromFile } from "file-type"
 import { die } from "./error.js"
-import { kfetch, zparse } from "./util.js"
+import { kfetch } from "./http.js"
 import { run_process } from "./process.js"
+import { zparse } from "./util.js"
 import { supabase_anon_key, supabase_url, type Session } from "./session.js"
 
 function auth_headers(sess: Session) {
