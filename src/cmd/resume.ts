@@ -29,6 +29,7 @@ examples:
 
 async function run(task_id: string, opts: { output?: string }) {
   const sess = await get_session()
+  let elapsed = 0
   while (true) {
     const row = await get_task(sess, task_id)
     if (!row) die(`task not found: ${task_id}`)
@@ -38,12 +39,14 @@ async function run(task_id: string, opts: { output?: string }) {
       await save_result(sess, task_id, row.endpoint, row.result, opts.output ?? null)
       return
     }
-    if (row.endpoint === "t3:seedance2") {
-      // server endpoint /poll/t3 will block until the task is complete or wait up to 40 seconds
-      await backend.poll_t3(sess, task_id)
-      continue
+    // both endpoints block up to 40s; poll/t3 also drives the upstream poller.
+    const res = row.endpoint === "t3:seedance2"
+      ? await backend.poll_t3(sess, task_id)
+      : await backend.poll(sess, task_id)
+    if (!res.is_completed) {
+      elapsed += 40
+      console.log(`polling... ${elapsed}s`)
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 }
 

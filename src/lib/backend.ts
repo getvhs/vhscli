@@ -60,13 +60,21 @@ export async function submit(sess: Session, task_id: string, timeout_ms: number)
   return invoke(sess, "main2/submit", { task_id }, submit_response, timeout_ms)
 }
 
-const poll_t3_response = z.discriminatedUnion("ok", [
+const poll_response = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), is_completed: z.boolean().nullable().default(null) }),
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
 
+// long-poll: server blocks up to 40s waiting for a realtime broadcast that
+// the task finalized.
+export async function poll(sess: Session, task_id: string) {
+  const res = await invoke(sess, "main2/poll", { task_id }, poll_response, 60_000)
+  if (!res.ok) die(`main2/poll: ${res.err}`)
+  return res
+}
+
 export async function poll_t3(sess: Session, task_id: string) {
-  const res = await invoke(sess, "main2/poll/t3", { task_id }, poll_t3_response, 60_000)
+  const res = await invoke(sess, "main2/poll/t3", { task_id }, poll_response, 60_000)
   if (!res.ok) die(`main2/poll/t3: ${res.err}`)
   return res
 }

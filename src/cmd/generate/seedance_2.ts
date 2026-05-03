@@ -3,6 +3,7 @@ import { z } from "zod"
 import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
+import * as backend from "../../lib/backend.js"
 import * as schema from "../../lib/schema/seedance_2.js"
 import { get_session, type Session } from "../../lib/session.js"
 import { get_task } from "../../lib/db.js"
@@ -118,27 +119,21 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
 }
 
 export async function save(sess: Session, task_id: string, output: string | null) {
-  let dotted = false
-  const finish_dots = () => { if (dotted) process.stdout.write("\n") }
+  let elapsed = 0
   while (true) {
     const row = await get_task(sess, task_id)
-    if (!row) {
-      finish_dots()
-      die(`task disappeared: ${task_id}`)
-    }
-    if (row.err) {
-      finish_dots()
-      die(row.err)
-    }
+    if (!row) die(`task disappeared: ${task_id}`)
+    if (row.err) die(row.err)
     if (row.result) {
-      finish_dots()
       const url = kparse(schema.response, row.result, "bad seedance-2 response").content.video_url
       await save_media(url, output, "seedance-2")
       return
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    process.stdout.write(".")
-    dotted = true
+    const res = await backend.poll(sess, task_id)
+    if (!res.is_completed) {
+      elapsed += 40
+      console.log(`polling... ${elapsed}s`)
+    }
   }
 }
 

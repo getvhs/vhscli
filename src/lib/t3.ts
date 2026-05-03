@@ -13,26 +13,23 @@ export async function submit_and_poll_t3(sess: Session, payload: Record<string, 
   console.log(`task_id: ${task_id}`)
   await insert_task(sess, task_id, "t3:seedance2", kparse(schema.request, payload, "bad t3-seedance-2 payload"))
 
-  process.stdout.write("generating video...")
+  console.log("generating video...")
   const submit_res = await backend.submit(sess, task_id, 90_000)
-  if (!submit_res.ok) {
-    process.stdout.write("\n")
-    die(submit_res.err)
-  }
+  if (!submit_res.ok) die(submit_res.err)
 
   const intermediate = kparse(schema.intermediate, submit_res.intermediate, "bad submit response")
   if (intermediate.error) {
-    process.stdout.write("\n")
     const e = intermediate.error
     die(e.code ? `${e.code}: ${e.message}` : e.message)
   }
 
+  let elapsed = 0
   while (true) {
-    process.stdout.write(".")
     const poll_res = await backend.poll_t3(sess, task_id)
     if (poll_res.is_completed) break
+    elapsed += 40
+    console.log(`polling... ${elapsed}s`)
   }
-  process.stdout.write("\n")
 
   const row = await get_task(sess, task_id)
   if (!row) die(`task disappeared: ${task_id}`)
