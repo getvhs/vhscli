@@ -1,11 +1,8 @@
 import { createHash } from "node:crypto"
-import { readFile, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { basename, join } from "node:path"
-import { fileTypeFromFile } from "file-type"
+import { readFile } from "node:fs/promises"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
-import { run_process } from "./process.js"
+import { detect_mime } from "./media.js"
 import { auth_headers, supabase_url, type Session } from "./session.js"
 
 export async function upload_file(sess: Session, path: string, content_type?: string) {
@@ -30,29 +27,6 @@ export async function upload_file(sess: Session, path: string, content_type?: st
   }
 
   return `${supabase_url}/storage/v1/object/public/tmp/${remote_path}`
-}
-
-export async function upload_image(sess: Session, path: string) {
-  const mime = await detect_mime(path)
-  if (mime === "image/jpeg" || mime === "image/png") {
-    return { url: await upload_file(sess, path, mime), mime }
-  }
-
-  const tmp = join(tmpdir(), `vhscli-${process.pid}-${Date.now()}-${basename(path)}.jpg`)
-  const res = await run_process("sips", ["-s", "format", "jpeg", path, "--out", tmp])
-  if (res.code !== 0) die(`sips conversion failed: ${res.code}`)
-
-  try {
-    return { url: await upload_file(sess, tmp, "image/jpeg"), mime: "image/jpeg" }
-  } finally {
-    await rm(tmp, { force: true })
-  }
-}
-
-async function detect_mime(path: string) {
-  const result = await fileTypeFromFile(path)
-  if (!result) die(`file mime detection failed: ${path}`)
-  return result.mime
 }
 
 function is_record(value: unknown): value is Record<string, unknown> {

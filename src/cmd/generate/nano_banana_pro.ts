@@ -5,7 +5,7 @@ import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/nano_banana.js"
 import { type Session } from "../../lib/session.js"
 import { submit } from "../../lib/submit.js"
-import { upload_image } from "../../lib/supabase.js"
+import { upload_image } from "../../lib/media.js"
 import { zparse } from "../../lib/util.js"
 import { get_session } from "../session.js"
 

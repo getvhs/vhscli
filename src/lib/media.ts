@@ -1,7 +1,12 @@
-import { rename, unlink, writeFile } from "node:fs/promises"
+import { rename, rm, unlink, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { basename, join } from "node:path"
+import { fileTypeFromFile } from "file-type"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
 import { run_process } from "./process.js"
+import { type Session } from "./session.js"
+import { upload_file } from "./storage.js"
 
 const mime_ext: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -48,6 +53,29 @@ export async function save_media(url: string, output: string | null, model: stri
   await unlink(src_tmp)
   await rename(out_tmp, final_output)
   console.log(`saved to ${final_output}`)
+}
+
+export async function upload_image(sess: Session, path: string) {
+  const mime = await detect_mime(path)
+  if (mime === "image/jpeg" || mime === "image/png") {
+    return { url: await upload_file(sess, path, mime), mime }
+  }
+
+  const tmp = join(tmpdir(), `vhscli-${process.pid}-${Date.now()}-${basename(path)}.jpg`)
+  const res = await run_process("sips", ["-s", "format", "jpeg", path, "--out", tmp])
+  if (res.code !== 0) die(`sips conversion failed: ${res.code}`)
+
+  try {
+    return { url: await upload_file(sess, tmp, "image/jpeg"), mime: "image/jpeg" }
+  } finally {
+    await rm(tmp, { force: true })
+  }
+}
+
+export async function detect_mime(path: string) {
+  const result = await fileTypeFromFile(path)
+  if (!result) die(`file mime detection failed: ${path}`)
+  return result.mime
 }
 
 function default_output(model: string, ext: string) {
