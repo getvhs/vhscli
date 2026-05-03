@@ -40,7 +40,7 @@ export const response = z.object({
     input_tokens: z.number(),
     output_tokens: z.number(),
     total_tokens: z.number(),
-  }).optional(),
+  }).nullable().default(null),
 })
 
 export type Message = z.infer<typeof message_output>

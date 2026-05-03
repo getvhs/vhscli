@@ -6,13 +6,15 @@ import { kparse } from "./parse.js"
 
 const jsonb = z.record(z.string(), z.unknown())
 
-// postgrest returns every selected column — null for unset, never absent —
-// so jsonb columns must be nullable in the schema, not just optional.
+// every field is .nullable().default(null) so the parsed row has a fixed
+// shape (key always present, value either real or null). postgrest already
+// returns null for unset columns; .default(null) handles selects that omit
+// a field. unifies the empty representation to null only.
 const task2 = z.object({
-  endpoint: z.string().nullish(),
-  result: jsonb.nullish(),
-  intermediate: jsonb.nullish(),
-  err: z.string().nullish(),
+  endpoint: z.string().nullable().default(null),
+  result: jsonb.nullable().default(null),
+  intermediate: jsonb.nullable().default(null),
+  err: z.string().nullable().default(null),
 })
 
 export async function insert_task(

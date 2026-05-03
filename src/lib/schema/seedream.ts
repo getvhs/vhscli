@@ -25,17 +25,17 @@ export const request = z.discriminatedUnion("model", [
 ])
 
 export const response = z.object({
-  model: z.string().optional(),
-  created: z.number().optional(),
+  model: z.string().nullable().default(null),
+  created: z.number().nullable().default(null),
   data: z.array(z.object({
-    url: z.string().optional(),
-    b64_json: z.string().optional(),
-    size: z.string().optional(),
-    error: z.object({ message: z.string() }).optional(),
+    url: z.string().nullable().default(null),
+    b64_json: z.string().nullable().default(null),
+    size: z.string().nullable().default(null),
+    error: z.object({ message: z.string() }).nullable().default(null),
   })).min(1),
   usage: z.object({
-    generated_images: z.number().optional(),
-    output_tokens: z.number().optional(),
-    total_tokens: z.number().optional(),
-  }).optional(),
+    generated_images: z.number().nullable().default(null),
+    output_tokens: z.number().nullable().default(null),
+    total_tokens: z.number().nullable().default(null),
+  }).nullable().default(null),
 })

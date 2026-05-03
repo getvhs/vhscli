@@ -37,15 +37,15 @@ export const response = z.looseObject({
   object: z.literal("video"),
   status: z.literal("completed"),
   url: z.string(),
-  video_url: z.string().nullish(),
+  video_url: z.string().nullable().default(null),
   duration: z.number().int(),
 })
 
 export const intermediate = z.looseObject({
-  id: z.string().nullish(),
+  id: z.string().nullable().default(null),
   error: z.looseObject({
-    code: z.string().optional(),
-    type: z.string().optional(),
+    code: z.string().nullable().default(null),
+    type: z.string().nullable().default(null),
     message: z.string(),
-  }).nullish(),
+  }).nullable().default(null),
 }).refine((d) => d.id || d.error, "must contain id or error")

@@ -46,8 +46,8 @@ export async function bootstrap(sess: Session) {
 const submit_response = z.discriminatedUnion("ok", [
   z.object({
     ok: z.literal(true),
-    result: z.unknown().optional(),
-    intermediate: z.unknown().optional(),
+    result: z.unknown().nullable().default(null),
+    intermediate: z.unknown().nullable().default(null),
   }),
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
@@ -61,7 +61,7 @@ export async function submit(sess: Session, task_id: string, timeout_ms: number)
 }
 
 const poll_t3_response = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), is_completed: z.boolean().optional() }),
+  z.object({ ok: z.literal(true), is_completed: z.boolean().nullable().default(null) }),
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
 

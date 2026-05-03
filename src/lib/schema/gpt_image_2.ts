@@ -18,10 +18,10 @@ const token_details = z.object({
 })
 
 export const response = z.looseObject({
-  created: z.number().optional(),
-  output_format: z.string().optional(),
-  quality: z.string().optional(),
-  size: z.string().optional(),
+  created: z.number().nullable().default(null),
+  output_format: z.string().nullable().default(null),
+  quality: z.string().nullable().default(null),
+  size: z.string().nullable().default(null),
   usage: z.object({
     input_tokens: z.number(),
     output_tokens: z.number(),
@@ -31,6 +31,6 @@ export const response = z.looseObject({
   }),
   data: z.array(z.object({
     url: z.string(),
-    revised_prompt: z.string().optional(),
+    revised_prompt: z.string().nullable().default(null),
   })).min(1),
 })

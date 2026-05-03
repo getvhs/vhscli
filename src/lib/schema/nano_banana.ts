@@ -42,16 +42,16 @@ export const request = z.object({
 })
 
 const response_part = z.object({
-  text: z.string().optional(),
-  inlineData: z.object({ mimeType: z.string(), url: z.string() }).optional(),
-  thoughtSignature: z.string().optional(),
-  thought: z.boolean().optional(),
+  text: z.string().nullable().default(null),
+  inlineData: z.object({ mimeType: z.string(), url: z.string() }).nullable().default(null),
+  thoughtSignature: z.string().nullable().default(null),
+  thought: z.boolean().nullable().default(null),
 })
 
 export const response = z.object({
   candidates: z.array(z.object({
-    content: z.object({ parts: z.array(response_part).optional() }),
-    finishReason: z.string().optional(),
-    groundingMetadata: z.unknown().optional(),
+    content: z.object({ parts: z.array(response_part).nullable().default(null) }),
+    finishReason: z.string().nullable().default(null),
+    groundingMetadata: z.unknown().nullable().default(null),
   })).min(1),
 })

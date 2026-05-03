@@ -39,6 +39,6 @@ export const response = z.object({
   status: z.literal("succeeded"),
   content: z.object({
     video_url: z.string(),
-    last_frame_url: z.string().optional(),
+    last_frame_url: z.string().nullable().default(null),
   }),
 })

@@ -32,7 +32,6 @@ cat question.txt | vhscli chat - -f paper.pdf
 ## Requirements
 
 - Node.js `22` or newer
-- `file` for MIME detection before upload
 - `sips` for local image conversion on macOS
 - `ffmpeg` when the requested video output format differs from the source
 
@@ -44,7 +43,7 @@ vhscli whoami
 vhscli logout
 ```
 
-`login` opens the browser, listens for the OAuth callback locally, and writes the session to `~/.vhs/session.json`.
+`login` opens the browser, listens for the OAuth callback locally, writes the session to `~/.vhs/session.json`, and initializes the user's billing account on first login.
 
 `whoami` prints the session email, falling back to the user id.
 
@@ -268,39 +267,39 @@ src/
       seedream_4_5.ts
       seedream_5.ts
   lib/
-    error.ts
-    media.ts
+    backend.ts    # one named function per vhs edge endpoint
+    db.ts         # named task2 helpers (insert_task, get_task)
+    error.ts      # die()
+    http.ts       # kfetch (fetch + timeout)
+    media.ts      # save_media, upload_image, detect_mime
+    parse.ts      # kparse (zod parse + diagnostic exit)
     process.ts
     prompt.ts
-    session.ts
-    submit.ts
-    supabase.ts
-    t3.ts
-    util.ts
-    schema/
+    session.ts    # session load/save, auth_headers
+    storage.ts    # upload_file (supabase storage)
+    t3.ts         # token360 fallback flow
+    task.ts       # create_and_submit (insert + submit)
+    schema/       # one file per model: request + response
 ```
 
 Command code lives in `src/cmd/`. Shared runtime code lives in `src/lib/`. Model schemas are split out so commands can import short names like `schema.request` and `schema.response`.
+
+`lib/backend.ts` and `lib/db.ts` are the two files that grow as we add endpoints, models, or columns. Both expose named, schema-validated helpers; callers never reach raw `fetch` or PostgREST URLs.
 
 ## Core Flow
 
 Generation and chat share the same server handoff:
 
 1. Parse and validate CLI inputs.
-2. Upload local media to Supabase Storage.
+2. Upload local media to Supabase Storage via `upload_file` / `upload_image`.
 3. Build the provider payload and validate it against the model schema.
-4. Create a `task2` row in Supabase PostgREST with:
-   - `id`: a generated task id
-   - `user_id`: the current session user id
-   - `endpoint`: the server provider route, such as `openai:image_generations`
-   - `payload`: the validated request payload
-5. Submit the task to `/functions/v1/main2/submit` with `{ task_id }`.
-6. Read `task2.result` or `task2.err`.
-7. Validate the result shape and save or print the output.
+4. Call `task.create_and_submit(sess, endpoint, payload, ...)`, which inserts a `task2` row (`id`, `user_id`, `endpoint`, `payload`) and submits it through `backend.submit()` (POST to `/functions/v1/main2/submit`).
+5. Read the response: synchronous endpoints return `result` directly; async endpoints (videos) populate `task2.result` later, so the CLI polls via `db.get_task()`.
+6. Validate the result shape with `kparse` and save or print the output.
 
-The CLI never calls model providers directly. The `task2` row is the durable job record; `/submit` is the server entry point for model execution.
+The CLI never calls model providers directly. The `task2` row is the durable job record; `backend.submit` is the only server entry point for model execution.
 
-Long jobs can finish after the local process exits. `vhscli resume <task_id>` reads the same `task2` row, waits for `result` or `err`, and saves output through the endpoint-specific result parser.
+Long jobs can finish after the local process exits. `vhscli resume <task_id>` re-reads the same `task2` row through `db.get_task`, waits for `result` or `err`, and saves output through the endpoint-specific result parser.
 
 ## Design Decisions
 
@@ -310,7 +309,7 @@ The package is ESM-only and targets modern Node. That keeps the runtime model si
 
 `commander` owns command parsing, help text, and option validation.
 
-`zod` validates request payloads before they are written to `task2`, then validates service responses before output is saved.
+`zod` validates request payloads before they are written to `task2`, then validates service responses before output is saved. Request schemas use `.optional()` (3rd-party providers handle missing keys vs `null` differently, so we omit fields we don't set); every other schema (responses, db rows, backend RPC payloads, internal state) uses `.nullable().default(null)` so the parsed shape is fixed and the CLI only handles one empty case (`null`).
 
 The CLI is intentionally thin: upload bytes, create a task row, call `/submit`, wait, and save the result. Provider-specific execution remains server-side.
 

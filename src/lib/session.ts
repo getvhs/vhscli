@@ -15,7 +15,7 @@ export const session_path = join(vhs_dir, "session.json")
 export type Session = {
   user_id: string
   access_token: string
-  email?: string
+  email: string | null
 }
 
 export function auth_headers(sess: Session) {
@@ -33,7 +33,7 @@ export const creds = z.object({
 const jwt_payload_schema = z.looseObject({
   sub: z.string(),
   exp: z.number(),
-  email: z.string().optional(),
+  email: z.string().nullable().default(null),
 })
 
 const refresh_response_schema = z.looseObject({
