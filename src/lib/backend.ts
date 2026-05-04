@@ -87,8 +87,8 @@ const new_asset_response = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
 
-export async function new_asset(sess: Session, image_url: string) {
-  const res = await invoke(sess, "t3/new_asset", { image_url }, new_asset_response, 90_000)
+export async function new_asset(sess: Session, media_url: string) {
+  const res = await invoke(sess, "t3/new_asset", { media_url }, new_asset_response, 90_000)
   if (!res.ok) die(`t3/new_asset: ${res.err}`)
   return res
 }
