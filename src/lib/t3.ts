@@ -55,7 +55,6 @@ export async function translate_seedance_2_to_t3(sess: Session, payload: z.infer
 
   for (const c of payload.content) {
     if (c.type === "text") continue
-    if (c.type === "audio_url") die("audio references can't translate to t3-seedance-2; remove -a and retry")
     if (c.type === "image_url") {
       console.log(`creating t3 asset from ${c.image_url.url}...`)
       const { asset_id } = await backend.new_asset(sess, c.image_url.url)
@@ -65,8 +64,13 @@ export async function translate_seedance_2_to_t3(sess: Session, payload: z.infer
       } else {
         input_references.push({ type: "image_url", image_url: { url } })
       }
+    } else if (c.type === "video_url") {
+      console.log(`creating t3 asset from ${c.video_url.url}...`)
+      const { asset_id } = await backend.new_asset(sess, c.video_url.url)
+      input_references.push({ type: "video_url", video_url: { url: `asset://${asset_id}` } })
     } else {
-      input_references.push({ type: "video_url", video_url: { url: c.video_url.url } })
+      // audio: token360 fetches the public url directly; no asset upload.
+      input_references.push({ type: "audio_url", audio_url: { url: c.audio_url.url } })
     }
   }
 

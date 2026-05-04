@@ -67,7 +67,7 @@ async function run(prompt_arg: string, opts: Opts) {
   // byteplus rejects real-face content sync at submit time; fall back once.
   // an async err surfacing later in save() is fatal — no fallback there.
   if (!sub.ok) {
-    if (should_t3_fallback(payload, sub.err)) {
+    if (should_t3_fallback(sub.err)) {
       await run_t3_fallback(sess, payload, output)
       return
     }
@@ -134,13 +134,13 @@ export async function save(sess: Session, task_id: string, output: string | null
   }
 }
 
-function should_t3_fallback(payload: Payload, err: string): boolean {
-  const has_images = payload.content.some((c) => c.type === "image_url")
-  return has_images && err.includes("InputImageSensitiveContentDetected.PrivacyInformation")
+function should_t3_fallback(err: string): boolean {
+  return err.includes("InputImageSensitiveContentDetected.PrivacyInformation") ||
+    err.includes("InputVideoSensitiveContentDetected.PrivacyInformation")
 }
 
 async function run_t3_fallback(sess: Session, payload: Payload, output: string | null) {
-  console.log("input image contains a real face; falling back to t3-seedance-2 with face referencing...")
+  console.log("input contains real-face content; falling back to t3-seedance-2 with virtual-portrait references...")
   const t3_payload = await translate_seedance_2_to_t3(sess, payload)
   const t3_result = await submit_and_poll_t3(sess, t3_payload)
   await save_t3_seedance_2_result(t3_result, output)

@@ -17,7 +17,12 @@ const video_reference = z.object({
   role: z.enum(["edit_source", "extend_source"]).optional(),
 })
 
-const input_reference = z.discriminatedUnion("type", [image_reference, video_reference])
+const audio_reference = z.object({
+  type: z.literal("audio_url"),
+  audio_url: z.object({ url: z.string() }),
+})
+
+const input_reference = z.discriminatedUnion("type", [image_reference, video_reference, audio_reference])
 
 export const request = z.object({
   model: z.literal("seedance-2.0"),
