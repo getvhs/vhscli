@@ -6,7 +6,7 @@ import { upload_image } from "../lib/media.js"
 import { get_session, type Session } from "../lib/session.js"
 import { upload_file } from "../lib/storage.js"
 import { kparse } from "../lib/parse.js"
-import { create_and_submit } from "../lib/task.js"
+import { create_and_submit, wait_for_task } from "../lib/task.js"
 
 type Opts = { image?: string[]; file?: string[]; video?: string; fps?: number }
 
@@ -33,11 +33,13 @@ async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
 
-  const sub = await create_and_submit(sess, "byteplus:seed-2-0-lite", payload, "thinking...", 60_000)
-  if (!sub.ok) die(sub.err)
+  const task_id = await create_and_submit(sess, "byteplus:seed-2-0-lite", payload)
+  console.log("thinking...")
+  const { result, err } = await wait_for_task(sess, task_id)
+  if (err) die(err)
 
-  const result = kparse(schema.response, sub.result, "bad chat response")
-  const message = result.output.find((o): o is schema.Message => o.type === "message")
+  const parsed = kparse(schema.response, result, "bad chat response")
+  const message = parsed.output.find((o): o is schema.Message => o.type === "message")
   if (!message) die("no message in chat response")
   console.log(message.content[0]!.text)
 }

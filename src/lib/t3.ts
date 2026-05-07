@@ -1,28 +1,22 @@
 import { z } from "zod"
 import * as backend from "./backend.js"
-import { get_task, insert_task } from "./db.js"
+import { get_task } from "./db.js"
 import { die } from "./error.js"
 import { save_media } from "./media.js"
 import * as seedance_schema from "./schema/seedance_2.js"
 import * as schema from "./schema/t3_seedance_2.js"
 import { type Session } from "./session.js"
+import { create_and_submit } from "./task.js"
 import { kparse } from "./parse.js"
 
+// t3 has no broadcast; /poll/t3 is pull-based, so we drive it directly
+// instead of using poll2. each /poll/t3 call advances the upstream poll for
+// up to ~40s, finalizing task2 when the video resolves. early errors (t3
+// rejected at submit) surface as completed_at + err set by /poll/t3.
 export async function submit_and_poll_t3(sess: Session, payload: Record<string, unknown>): Promise<unknown> {
-  const task_id = crypto.randomUUID()
-  console.log(`task_id: ${task_id}`)
-  await insert_task(sess, task_id, "t3:seedance2", kparse(schema.request, payload, "bad t3-seedance-2 payload"))
+  const task_id = await create_and_submit(sess, "t3:seedance2", kparse(schema.request, payload, "bad t3-seedance-2 payload"))
 
   console.log("generating video...")
-  const submit_res = await backend.submit(sess, task_id, 90_000)
-  if (!submit_res.ok) die(submit_res.err)
-
-  const intermediate = kparse(schema.intermediate, submit_res.intermediate, "bad submit response")
-  if (intermediate.error) {
-    const e = intermediate.error
-    die(e.code ? `${e.code}: ${e.message}` : e.message)
-  }
-
   const start = Date.now()
   while (true) {
     const poll_res = await backend.poll_t3(sess, task_id)

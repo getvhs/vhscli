@@ -43,38 +43,48 @@ export async function bootstrap(sess: Session) {
   return res
 }
 
-const submit_response = z.discriminatedUnion("ok", [
+const submit2_response = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true) }),
+  z.object({ ok: z.literal(false), err: z.string() }),
+])
+
+// non-blocking submit. backend kicks off provider work in waitUntil and
+// returns immediately. result/err arrive later via poll2 (or poll/t3 for
+// the t3 endpoint, which drives the upstream poller).
+export async function submit2(sess: Session, task_id: string) {
+  const res = await invoke(sess, "main2/submit2", { task_id }, submit2_response, 30_000)
+  if (!res.ok) die(`main2/submit2: ${res.err}`)
+  return res
+}
+
+const poll2_response = z.discriminatedUnion("ok", [
   z.object({
     ok: z.literal(true),
+    is_completed: z.boolean(),
+    completed_at: z.string().nullable().default(null),
     result: z.unknown().nullable().default(null),
-    intermediate: z.unknown().nullable().default(null),
+    err: z.string().nullable().default(null),
   }),
   z.object({ ok: z.literal(false), err: z.string() }),
 ])
 
-// returns the raw response (ok:true with payload, or ok:false with err).
-// callers must check res.ok — they often want to inspect the err to decide
-// whether to fall back (e.g. seedance falls back to t3 on a real-face
-// rejection that surfaces here as `ok:false, err: "...PrivacyInformation..."`).
-export async function submit(sess: Session, task_id: string, timeout_ms: number) {
-  return invoke(sess, "main2/submit", { task_id }, submit_response, timeout_ms)
-}
-
-const poll_response = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), is_completed: z.boolean().nullable().default(null) }),
-  z.object({ ok: z.literal(false), err: z.string() }),
-])
-
 // long-poll: server blocks up to 40s waiting for a realtime broadcast that
-// the task finalized.
-export async function poll(sess: Session, task_id: string) {
-  const res = await invoke(sess, "main2/poll", { task_id }, poll_response, 60_000)
-  if (!res.ok) die(`main2/poll: ${res.err}`)
+// the task finalized. on completion returns result + err inline.
+export async function poll2(sess: Session, task_id: string) {
+  const res = await invoke(sess, "main2/poll2", { task_id }, poll2_response, 60_000)
+  if (!res.ok) die(`main2/poll2: ${res.err}`)
   return res
 }
 
+const poll_t3_response = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), is_completed: z.boolean() }),
+  z.object({ ok: z.literal(false), err: z.string() }),
+])
+
+// drives the t3 upstream poller for one ~40s window. unlike poll2 this is
+// pull-based; the t3 endpoint has no broadcast.
 export async function poll_t3(sess: Session, task_id: string) {
-  const res = await invoke(sess, "main2/poll/t3", { task_id }, poll_response, 60_000)
+  const res = await invoke(sess, "main2/poll/t3", { task_id }, poll_t3_response, 60_000)
   if (!res.ok) die(`main2/poll/t3: ${res.err}`)
   return res
 }

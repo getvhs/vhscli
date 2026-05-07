@@ -3,11 +3,9 @@ import { z } from "zod"
 import { die } from "../../lib/error.js"
 import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
-import * as backend from "../../lib/backend.js"
 import * as schema from "../../lib/schema/seedance_2.js"
 import { get_session, type Session } from "../../lib/session.js"
-import { get_task } from "../../lib/db.js"
-import { create_and_submit } from "../../lib/task.js"
+import { create_and_submit, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
 import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
@@ -63,17 +61,18 @@ async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
   const output = opts.output ?? null
-  const sub = await create_and_submit(sess, "byteplus:seedance-2-0", payload, "generating video...", 20_000)
-  // byteplus rejects real-face content sync at submit time; fall back once.
-  // an async err surfacing later in save() is fatal — no fallback there.
-  if (!sub.ok) {
-    if (should_t3_fallback(sub.err)) {
+  const task_id = await create_and_submit(sess, "byteplus:seedance-2-0", payload)
+  console.log("generating video...")
+  const { result, err } = await wait_for_task(sess, task_id)
+  // byteplus rejects real-face content; fall back to t3 once.
+  if (err) {
+    if (should_t3_fallback(err)) {
       await run_t3_fallback(sess, payload, output)
       return
     }
-    die(sub.err)
+    die(err)
   }
-  await save(sess, sub.task_id, output)
+  await save(result, output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
@@ -118,20 +117,9 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   return kparse(schema.request, payload, "bad seedance-2 payload")
 }
 
-export async function save(sess: Session, task_id: string, output: string | null) {
-  const start = Date.now()
-  while (true) {
-    const row = await get_task(sess, task_id)
-    if (!row) die(`task disappeared: ${task_id}`)
-    if (row.err) die(row.err)
-    if (row.result) {
-      const url = kparse(schema.response, row.result, "bad seedance-2 response").content.video_url
-      await save_media(url, output, "seedance-2")
-      return
-    }
-    const res = await backend.poll(sess, task_id)
-    if (!res.is_completed) console.log(`polling... ${Math.round((Date.now() - start) / 1000)}s`)
-  }
+export async function save(result: unknown, output: string | null) {
+  const url = kparse(schema.response, result, "bad seedance-2 response").content.video_url
+  await save_media(url, output, "seedance-2")
 }
 
 function should_t3_fallback(err: string): boolean {

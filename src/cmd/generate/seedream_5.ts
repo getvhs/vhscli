@@ -4,7 +4,7 @@ import { save_media } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedream.js"
 import { get_session, type Session } from "../../lib/session.js"
-import { create_and_submit } from "../../lib/task.js"
+import { create_and_submit, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
 
@@ -37,9 +37,11 @@ examples:
 async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const sub = await create_and_submit(sess, "byteplus:seedream-5-0", payload, "generating image...", 300_000)
-  if (!sub.ok) die(sub.err)
-  await save(sub.result, opts.output ?? null)
+  const task_id = await create_and_submit(sess, "byteplus:seedream-5-0", payload)
+  console.log("generating image...")
+  const { result, err } = await wait_for_task(sess, task_id)
+  if (err) die(err)
+  await save(result, opts.output ?? null)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
