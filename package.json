@@ -1,6 +1,6 @@
 {
   "name": "@getvhs/vhscli",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "generate images and videos with ai",
   "type": "module",
   "bin": {
