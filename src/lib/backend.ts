@@ -7,10 +7,10 @@ import { kparse } from "./parse.js"
 // our backend uses rpc over http, not rest. every call either succeeds with
 // `{ok: true, ...}` or fails with `{ok: false, err}`. a non-200 status code
 // or a timeout means the rpc layer itself broke (gateway, auth, network) —
-// always fatal. application-level `ok: false` is also fatal in most cases,
-// so backend.* helpers below check it and die. submit() is the exception:
-// it returns the raw response so seedance can fall back to t3 on a
-// real-face rejection. see backend.submit().
+// always fatal. application-level `ok: false` is also fatal too, so the
+// backend.* helpers below check it and die. provider-level errors (e.g.
+// byteplus real-face rejection) come back as `err` on a successful poll2
+// response, not as `ok: false` here.
 async function invoke<T extends z.ZodType>(
   sess: Session,
   fn: string,
