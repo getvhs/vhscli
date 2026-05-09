@@ -2,6 +2,7 @@ import { Command } from "commander"
 import * as backend from "../lib/backend.js"
 import { get_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
+import { validate_output } from "../lib/media.js"
 import { get_session, type Session } from "../lib/session.js"
 import * as gpt_image_2 from "./generate/gpt_image_2.js"
 import * as nano_banana_2 from "./generate/nano_banana_2.js"
@@ -33,6 +34,7 @@ async function run(task_id: string, opts: { output?: string }) {
   const row = await get_task(sess, task_id)
   if (!row) die(`task not found: ${task_id}`)
   if (!row.endpoint) die("task has no endpoint")
+  validate_output(opts.output, endpoint_kind(row.endpoint))
 
   // already finalized (e.g. resume run twice): skip the wait.
   let result = row.result as unknown
@@ -77,6 +79,20 @@ async function save_result(endpoint: string, result: unknown, output: string | n
     case "google:nano_banana_pro": return nano_banana_pro.save(result, output)
     case "openai:image_generations":
     case "openai:image_edits": return gpt_image_2.save(result, output)
+    default: die(`unknown endpoint: ${endpoint}`)
+  }
+}
+
+function endpoint_kind(endpoint: string): "image" | "video" {
+  switch (endpoint) {
+    case "byteplus:seedance-2-0":
+    case "t3:seedance2": return "video"
+    case "byteplus:seedream-4-5":
+    case "byteplus:seedream-5-0":
+    case "google:nano_banana_2":
+    case "google:nano_banana_pro":
+    case "openai:image_generations":
+    case "openai:image_edits": return "image"
     default: die(`unknown endpoint: ${endpoint}`)
   }
 }

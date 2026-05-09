@@ -17,6 +17,21 @@ const mime_ext: Record<string, string> = {
   "video/quicktime": "mov",
 }
 
+const ext_kind: Record<string, "image" | "video"> = {
+  jpg: "image", jpeg: "image", png: "image", webp: "image",
+  mp4: "video", webm: "video", mov: "video",
+}
+
+export function validate_output(output: string | null | undefined, kind: "image" | "video") {
+  if (!output) return
+  const dot = output.lastIndexOf(".")
+  if (dot < 0) die(`no extension: ${output}`)
+  const ext = output.slice(dot + 1).toLowerCase()
+  const got = ext_kind[ext]
+  if (!got) die(`unsupported output ext: .${ext}`)
+  if (got !== kind) die(`expected ${kind} output, got .${ext}`)
+}
+
 export async function save_media(url: string, output: string | null, model: string) {
   const res = await kfetch(url, { timeout_ms: 600_000 })
   if (!res.ok) die(`download failed: ${res.status}`)

@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError, Option } from "commander"
 import { z } from "zod"
 import { die } from "../../lib/error.js"
-import { save_media } from "../../lib/media.js"
+import { save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
 import { get_session, type Session } from "../../lib/session.js"
@@ -58,6 +58,7 @@ examples:
 }
 
 async function run(prompt_arg: string, opts: Opts) {
+  validate_output(opts.output, "video")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
   const output = opts.output ?? null

@@ -1,6 +1,6 @@
 import { Command, Option } from "commander"
 import { die } from "../../lib/error.js"
-import { save_media } from "../../lib/media.js"
+import { save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/nano_banana.js"
 import { get_session, type Session } from "../../lib/session.js"
@@ -46,6 +46,7 @@ examples:
 }
 
 async function run(prompt_arg: string, opts: Opts) {
+  validate_output(opts.output, "image")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
   const task_id = await create_and_submit(sess, "google:nano_banana_2", payload)
