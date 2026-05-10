@@ -253,11 +253,9 @@ src/
   version.ts
   cmd/
     chat.ts
-    login.ts
     logout.ts
     models.ts
     resume.ts
-    session.ts
     whoami.ts
     generate/
       gpt_image_2.ts
@@ -275,7 +273,7 @@ src/
     parse.ts      # kparse (zod parse + diagnostic exit)
     process.ts
     prompt.ts
-    session.ts    # session load/save, auth_headers
+    session.ts    # session load/save, auth_headers, login (registered from main.ts)
     storage.ts    # upload_file (supabase storage)
     t3.ts         # token360 path for seedance-2 (poll + asset retry on real-face err)
     task.ts       # create_and_submit (insert + submit)
@@ -293,13 +291,13 @@ Generation and chat share the same server handoff:
 1. Parse and validate CLI inputs.
 2. Upload local media to Supabase Storage via `upload_file` / `upload_image`.
 3. Build the provider payload and validate it against the model schema.
-4. Call `task.create_and_submit(sess, endpoint, payload, ...)`, which inserts a `task2` row (`id`, `user_id`, `endpoint`, `payload`) and submits it through `backend.submit()` (POST to `/functions/v1/main2/submit`).
-5. Read the response: synchronous endpoints return `result` directly; async endpoints (videos) populate `task2.result` later, so the CLI polls via `db.get_task()`.
+4. Call `task.create_and_submit(sess, endpoint, payload, ...)`, which inserts a `task2` row (`id`, `user_id`, `endpoint`, `payload`) and kicks off provider work via `backend.submit2()` (POST to `/functions/v1/main2/submit2`); the call returns immediately.
+5. Long-poll for the result: most endpoints use `backend.poll2()` via `wait_for_task` (server holds the request open until a realtime broadcast fires); the t3 video path uses `backend.poll_t3()` via `wait_for_t3_task` (pull-based, drives the upstream poller). Each poll round returns `result` and `err` once the task is finalized.
 6. Validate the result shape with `kparse` and save or print the output.
 
-The CLI never calls model providers directly. The `task2` row is the durable job record; `backend.submit` is the only server entry point for model execution.
+The CLI never calls model providers directly. The `task2` row is the durable job record; `backend.submit2` is the only server entry point for model execution.
 
-Long jobs can finish after the local process exits. `vhscli resume <task_id>` re-reads the same `task2` row through `db.get_task`, waits for `result` or `err`, and saves output through the endpoint-specific result parser.
+Long jobs can finish after the local process exits. `vhscli resume <task_id>` re-attaches via the same `wait_for_task` / `wait_for_t3_task` helpers, then reads the final `task2` row through `db.get_task` and saves output through the endpoint-specific result parser.
 
 ## Design Decisions
 
