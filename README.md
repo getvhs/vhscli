@@ -97,9 +97,9 @@ vhscli chat "list key events with HH:mm:ss timestamps" -v clip.mp4 --fps 2
 
 Options:
 
-- `-i, --image <path>` attaches an image. Repeat for multiple images.
-- `-f, --file <path>` attaches a PDF. Repeat for multiple files.
-- `-v, --video <path>` attaches one video.
+- `-i <path>` attaches an image. Repeat for multiple images.
+- `-f <path>` attaches a PDF. Repeat for multiple files.
+- `-v <path>` attaches one video.
 - `--fps <n>` samples video from `0.2` to `5` frames per second. Default is `1`.
 
 ## Image Models
@@ -116,8 +116,8 @@ vhscli generate seedream-5 "remove her hat, keep everything else" -i photo.jpg
 Options:
 
 - `-o, --output <path>` sets the output path.
-- `-i, --image <path>` adds a reference image. Maximum `14`; repeat for more.
-- `--size <size>` accepts `2K`, `3K`, or custom `WxH`.
+- `-i <path>` adds a reference image. Maximum `14`; repeat for more.
+- `--size <size>` accepts `2K`, `3K`, or custom `WxH`. Default is `2K`.
 
 Custom sizes must pass the model pixel range and aspect ratio checks enforced by the CLI.
 
@@ -133,8 +133,8 @@ vhscli generate seedream-4-5 "swap the dress to red, keep her pose unchanged" -i
 Options:
 
 - `-o, --output <path>` sets the output path.
-- `-i, --image <path>` adds a reference image. Maximum `14`; repeat for more.
-- `--size <size>` accepts `2K`, `4K`, or custom `WxH`.
+- `-i <path>` adds a reference image. Maximum `14`; repeat for more.
+- `--size <size>` accepts `2K`, `4K`, or custom `WxH`. Default is `2K`.
 
 ### `nano-banana-2`
 
@@ -148,9 +148,9 @@ vhscli generate nano-banana-2 "current weather in san francisco shown as a tiny 
 Options:
 
 - `-o, --output <path>` sets the output path.
-- `-i, --image <path>` adds a reference image. Maximum `14`; repeat for more.
-- `--ratio <ratio>` sets aspect ratio.
-- `--size <size>` accepts `512`, `1K`, `2K`, or `4K`.
+- `-i <path>` adds a reference image. Maximum `14`; repeat for more.
+- `--ratio <ratio>` sets aspect ratio. Default is `1:1`.
+- `--size <size>` accepts `512`, `1K`, `2K`, or `4K`. Default is `1K`.
 - `--think <level>` accepts `minimal` or `high`.
 - `--search` enables Google web search.
 - `--image-search` enables Google image search and also enables web search.
@@ -169,9 +169,9 @@ vhscli generate nano-banana-pro "a sun-drenched minimalist living room with a 3d
 Options:
 
 - `-o, --output <path>` sets the output path.
-- `-i, --image <path>` adds a reference image. Maximum `14`; repeat for more.
-- `--ratio <ratio>` sets aspect ratio.
-- `--size <size>` accepts `1K`, `2K`, or `4K`.
+- `-i <path>` adds a reference image. Maximum `14`; repeat for more.
+- `--ratio <ratio>` sets aspect ratio. Default is `1:1`.
+- `--size <size>` accepts `1K`, `2K`, or `4K`. Default is `1K`.
 
 Supported ratios are `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, and `21:9`.
 
@@ -188,11 +188,11 @@ vhscli generate gpt-image-2 "add a red balloon in the masked area" -i room.png -
 Options:
 
 - `-o, --output <path>` sets the output path.
-- `-i, --image <path>` adds a reference image. Repeat for more.
+- `-i <path>` adds a reference image. Repeat for more.
 - `--mask <path>` adds an edit mask. It requires `-i`.
-- `--size <size>` accepts a preset or custom `WxH`.
+- `--size <size>` accepts a preset or custom `WxH`. Default is `1024x1024`.
 
-Size presets are `auto`, `1024x1024`, `1536x1024`, `1024x1536`, `2048x2048`, `2048x1152`, and `3840x2160`.
+Size presets are `1024x1024`, `1536x1024`, `1024x1536`, `2048x2048`, `2048x1152`, and `3840x2160`.
 
 Custom sizes must use multiples of `16`, max edge `3840`, total pixels from `655360` to `8294400`, and aspect ratio from `1:3` to `3:1`.
 
@@ -215,13 +215,13 @@ Options:
 - `-o, --output <path>` sets the output path.
 - `--first-frame <image>` uses an image as the first frame.
 - `--last-frame <image>` uses an image as the last frame. It requires `--first-frame`.
-- `-i, --image <path>` adds a reference image. Maximum `9`. Conflicts with `--first-frame`.
-- `-v, --video <path>` adds a reference video. Maximum `3`; repeat for more.
-- `-a, --audio <path>` adds a reference audio file. Maximum `3`. Requires at least one `-i` or `-v`.
-- `--ratio <ratio>` accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive`.
-- `--resolution <res>` accepts `480p`, `720p`, or `1080p`.
-- `--duration <n>` accepts `4` to `15`, or `-1` for auto. Default is `5`.
-- `--silent` disables audio generation.
+- `-i <path>` adds a reference image. Maximum `9`. Conflicts with `--first-frame`.
+- `-v <path>` adds a reference video. Maximum `3`; repeat for more.
+- `-a <path>` adds a reference audio file. Maximum `3`. Requires at least one `-i` or `-v`.
+- `--ratio <ratio>` accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive`. Default is `16:9`.
+- `--resolution <res>` accepts `480p`, `720p`, or `1080p`. Default is `720p`.
+- `--duration <n>` accepts `4` to `15`. Default is `5`.
+- `--audio` / `--no-audio` toggles the audio track. Default is `--audio` (audio on); pass `--no-audio` for a silent video.
 - `--seed <n>` sets a random seed.
 
 The command polls until the result is ready and prints progress dots. If the process stops, use `vhscli resume <task_id>`.
@@ -277,7 +277,7 @@ src/
     prompt.ts
     session.ts    # session load/save, auth_headers
     storage.ts    # upload_file (supabase storage)
-    t3.ts         # token360 fallback flow
+    t3.ts         # token360 path for seedance-2 (poll + asset retry on real-face err)
     task.ts       # create_and_submit (insert + submit)
     schema/       # one file per model: request + response
 ```
