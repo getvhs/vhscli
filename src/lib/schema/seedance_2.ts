@@ -19,8 +19,11 @@ const content = z.discriminatedUnion("type", [
   }),
 ])
 
+// byteplus seedance-2 request shape, sent to t3 in passthrough mode
+// (Token360-Native-Params: true). model is the t3 platform id, not the
+// byteplus one (`dreamina-seedance-2-0-260128`).
 export const request = z.object({
-  model: z.literal("dreamina-seedance-2-0-260128"),
+  model: z.literal("seedance-2.0"),
   content: z.array(content).min(1),
   return_last_frame: z.boolean().optional(),
   service_tier: z.literal("default").optional(),
@@ -34,11 +37,12 @@ export const request = z.object({
   watermark: z.boolean().optional(),
 })
 
-export const response = z.object({
+// t3 /v1/videos/{id} completed response (t3 wrapper shape).
+export const response = z.looseObject({
   id: z.string(),
-  status: z.literal("succeeded"),
-  content: z.object({
-    video_url: z.string(),
-    last_frame_url: z.string().nullable().default(null),
-  }),
+  object: z.literal("video"),
+  status: z.literal("completed"),
+  url: z.string(),
+  video_url: z.string().nullable().default(null),
+  duration: z.number().int(),
 })

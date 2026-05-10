@@ -1,5 +1,4 @@
 import { Command } from "commander"
-import * as backend from "../lib/backend.js"
 import { get_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
 import { validate_output } from "../lib/media.js"
@@ -10,7 +9,7 @@ import * as nano_banana_pro from "./generate/nano_banana_pro.js"
 import * as seedance_2 from "./generate/seedance_2.js"
 import * as seedream_4_5 from "./generate/seedream_4_5.js"
 import * as seedream_5 from "./generate/seedream_5.js"
-import { save_t3_seedance_2_result } from "../lib/t3.js"
+import { wait_for_t3_task } from "../lib/t3.js"
 import { wait_for_task } from "../lib/task.js"
 
 export function register_resume(program: Command) {
@@ -41,17 +40,11 @@ async function run(task_id: string, opts: { output?: string }) {
   let err = row.err
 
   if (!result && !err) {
-    if (row.endpoint === "t3:seedance2") {
-      await wait_for_t3(sess, task_id)
-      const final_row = await get_task(sess, task_id)
-      if (!final_row) die(`task disappeared: ${task_id}`)
-      result = final_row.result
-      err = final_row.err
-    } else {
-      const r = await wait_for_task(sess, task_id)
-      result = r.result
-      err = r.err
-    }
+    const r = row.endpoint === "t3:seedance2"
+      ? await wait_for_t3_task(sess, task_id)
+      : await wait_for_task(sess, task_id)
+    result = r.result
+    err = r.err
   }
 
   if (err) die(err)
@@ -59,20 +52,9 @@ async function run(task_id: string, opts: { output?: string }) {
   await save_result(row.endpoint, result, opts.output ?? null)
 }
 
-// t3 has no broadcast; drive /poll/t3 in a loop until it finalizes.
-async function wait_for_t3(sess: Session, task_id: string) {
-  const start = Date.now()
-  while (true) {
-    const res = await backend.poll_t3(sess, task_id)
-    if (res.is_completed) return
-    console.log(`polling... ${Math.round((Date.now() - start) / 1000)}s`)
-  }
-}
-
 async function save_result(endpoint: string, result: unknown, output: string | null) {
   switch (endpoint) {
-    case "byteplus:seedance-2-0": return seedance_2.save(result, output)
-    case "t3:seedance2": return save_t3_seedance_2_result(result, output)
+    case "t3:seedance2": return seedance_2.save(result, output)
     case "byteplus:seedream-4-5": return seedream_4_5.save(result, output)
     case "byteplus:seedream-5-0": return seedream_5.save(result, output)
     case "google:nano_banana_2": return nano_banana_2.save(result, output)
@@ -85,7 +67,6 @@ async function save_result(endpoint: string, result: unknown, output: string | n
 
 function endpoint_kind(endpoint: string): "image" | "video" {
   switch (endpoint) {
-    case "byteplus:seedance-2-0":
     case "t3:seedance2": return "video"
     case "byteplus:seedream-4-5":
     case "byteplus:seedream-5-0":

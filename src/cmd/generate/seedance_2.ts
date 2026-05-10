@@ -5,10 +5,10 @@ import { save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/seedance_2.js"
 import { get_session, type Session } from "../../lib/session.js"
-import { create_and_submit, wait_for_task } from "../../lib/task.js"
+import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
-import { save_t3_seedance_2_result, submit_and_poll_t3, translate_seedance_2_to_t3 } from "../../lib/t3.js"
+import { images_to_assets, wait_for_t3_task } from "../../lib/t3.js"
 import { kparse } from "../../lib/parse.js"
 
 type Payload = z.infer<typeof schema.request>
@@ -62,13 +62,14 @@ async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
   const output = opts.output ?? null
-  const task_id = await create_and_submit(sess, "byteplus:seedance-2-0", payload)
+  const task_id = await create_and_submit(sess, "t3:seedance2", payload)
   console.log("generating video...")
-  const { result, err } = await wait_for_task(sess, task_id)
-  // byteplus rejects real-face content; fall back to t3 once.
+  const { result, err } = await wait_for_t3_task(sess, task_id)
+  // t3 forwards to byteplus, which rejects real-face content; retry once
+  // through t3 virtual-portrait assets.
   if (err) {
-    if (should_t3_fallback(err)) {
-      await run_t3_fallback(sess, payload, output)
+    if (is_privacy_error(err)) {
+      await retry_with_assets(sess, payload, output)
       return
     }
     die(err)
@@ -108,7 +109,7 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
     for (const audio of audios) content.push({ type: "audio_url", audio_url: { url: await upload_av(audio) }, role: "reference_audio" })
   }
 
-  const payload: Record<string, unknown> = { model: "dreamina-seedance-2-0-260128", content }
+  const payload: Record<string, unknown> = { model: "seedance-2.0", content }
   if (opts.resolution) payload.resolution = opts.resolution
   if (opts.ratio) payload.ratio = opts.ratio
   if (opts.duration != null) payload.duration = opts.duration
@@ -119,20 +120,23 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
 }
 
 export async function save(result: unknown, output: string | null) {
-  const url = kparse(schema.response, result, "bad seedance-2 response").content.video_url
+  const url = kparse(schema.response, result, "bad seedance-2 response").url
   await save_media(url, output, "seedance-2")
 }
 
-function should_t3_fallback(err: string): boolean {
+function is_privacy_error(err: string): boolean {
   return err.includes("InputImageSensitiveContentDetected.PrivacyInformation") ||
     err.includes("InputVideoSensitiveContentDetected.PrivacyInformation")
 }
 
-async function run_t3_fallback(sess: Session, payload: Payload, output: string | null) {
-  console.log("input contains real-face content; falling back to t3-seedance-2 with virtual-portrait references...")
-  const t3_payload = await translate_seedance_2_to_t3(sess, payload)
-  const t3_result = await submit_and_poll_t3(sess, t3_payload)
-  await save_t3_seedance_2_result(t3_result, output)
+async function retry_with_assets(sess: Session, payload: Payload, output: string | null) {
+  console.log("input contains real-face content; retrying via t3 virtual-portrait assets...")
+  const asset_payload = await images_to_assets(sess, payload)
+  const task_id = await create_and_submit(sess, "t3:seedance2", asset_payload)
+  console.log("regenerating video...")
+  const { result, err } = await wait_for_t3_task(sess, task_id)
+  if (err) die(err)
+  await save(result, output)
 }
 
 function parse_duration(value: string) {
