@@ -20,10 +20,10 @@ type Opts = {
   output?: string
   firstFrame?: string
   lastFrame?: string
-  image?: string[]
-  video?: string[]
-  audio?: string[]
-  silent?: boolean
+  i?: string[]
+  v?: string[]
+  a?: string[]
+  audio: boolean
   ratio?: string
   resolution?: string
   duration?: number
@@ -37,13 +37,14 @@ export function register(program: Command) {
     .option("-o, --output <path>", "output file path (default: ./vhscli-seedance-2-<timestamp>.mp4)")
     .option("--first-frame <image>", "use as the first frame")
     .option("--last-frame <image>", "use as the last frame (needs --first-frame)")
-    .option("-i, --image <path>", "reference image (max 9, repeat -i for more). conflicts with --first-frame", collect)
-    .option("-v, --video <path>", "reference video (max 3, repeat -v for more)", collect)
-    .option("-a, --audio <path>", "reference audio (max 3, repeat -a for more). needs -i or -v", collect)
-    .addOption(new Option("--ratio <ratio>", "aspect ratio (default: adaptive)").choices(ratios))
+    .option("-i <path>", "reference image (max 9, repeat -i for more). conflicts with --first-frame", collect)
+    .option("-v <path>", "reference video (max 3, repeat -v for more)", collect)
+    .option("-a <path>", "reference audio (max 3, repeat -a for more). needs -i or -v", collect)
+    .addOption(new Option("--ratio <ratio>", "aspect ratio (default: 16:9)").choices(ratios))
     .addOption(new Option("--resolution <res>", "video resolution (default: 720p)").choices(resolutions))
-    .option("--duration <n>", "video length in seconds: 4-15, or -1 for auto (default: 5)", parse_duration)
-    .option("--silent", "make a silent video")
+    .option("--duration <n>", "video length in seconds: 4-15 (default: 5)", parse_duration)
+    .option("--audio", "include audio in output (default)", true)
+    .option("--no-audio", "make a silent video")
     .option("--seed <n>", "random seed for reproducible output", parse_seed)
     .showHelpAfterError("(run 'vhscli generate seedance-2 --help' for usage)")
     .addHelpText("after", `
@@ -79,9 +80,9 @@ async function run(prompt_arg: string, opts: Opts) {
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
-  const images = opts.image ?? []
-  const videos = opts.video ?? []
-  const audios = opts.audio ?? []
+  const images = opts.i ?? []
+  const videos = opts.v ?? []
+  const audios = opts.a ?? []
 
   if (opts.lastFrame && !opts.firstFrame) die("--last-frame requires --first-frame")
   if (opts.firstFrame && images.length > 0) die("--first-frame conflicts with -i")
@@ -110,10 +111,12 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   }
 
   const payload: Record<string, unknown> = { model: "seedance-2.0", content }
-  if (opts.resolution) payload.resolution = opts.resolution
-  if (opts.ratio) payload.ratio = opts.ratio
-  if (opts.duration != null) payload.duration = opts.duration
-  if (opts.silent) payload.generate_audio = false
+  // always set ratio / resolution / duration / generate_audio explicitly
+  // so the provider never picks for us.
+  payload.ratio = opts.ratio ?? "16:9"
+  payload.resolution = opts.resolution ?? "720p"
+  payload.duration = opts.duration ?? 5
+  payload.generate_audio = opts.audio
   if (opts.seed != null) payload.seed = opts.seed
 
   return kparse(schema.request, payload, "bad seedance-2 payload")
@@ -142,7 +145,7 @@ async function retry_with_assets(sess: Session, payload: Payload, output: string
 function parse_duration(value: string) {
   const n = Number(value)
   if (!Number.isInteger(n)) throw new InvalidArgumentError("must be an integer")
-  if (n !== -1 && (n < 4 || n > 15)) throw new InvalidArgumentError("must be 4-15, or -1")
+  if (n < 4 || n > 15) throw new InvalidArgumentError("must be 4-15")
   return n
 }
 

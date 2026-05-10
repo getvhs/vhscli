@@ -8,22 +8,22 @@ import { create_and_submit, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
 
-const size_presets = ["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
+const size_presets = ["1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
 const ext_format: Record<string, "png" | "jpeg" | "webp"> = { png: "png", jpg: "jpeg", jpeg: "jpeg", webp: "webp" }
 const min_pixels = 655_360
 const max_pixels = 8_294_400
 const max_edge = 3840
 
-type Opts = { output?: string; image?: string[]; mask?: string; size?: string }
+type Opts = { output?: string; i?: string[]; mask?: string; size?: string }
 
 export function register(program: Command) {
   program.command("gpt-image-2")
     .description("generate or edit an image with openai gpt-image-2")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-gpt-image-2-<timestamp>.png)")
-    .option("-i, --image <path>", "reference image for edits (repeat -i for more)", collect)
+    .option("-i <path>", "reference image for edits (repeat -i for more)", collect)
     .option("--mask <path>", "edit mask (png with transparent pixels marking edit regions); requires -i")
-    .option("--size <size>", "image size: preset or WxH (default: auto)", parse_size)
+    .option("--size <size>", "image size: preset or WxH (default: 1024x1024)", parse_size)
     .showHelpAfterError("(run 'vhscli generate gpt-image-2 --help' for usage)")
     .addHelpText("after", `
 generates one image from a text prompt and saves it to the current
@@ -50,7 +50,7 @@ async function run(prompt_arg: string, opts: Opts) {
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
-  const images = opts.image ?? []
+  const images = opts.i ?? []
   if (opts.mask && images.length === 0) die("--mask requires -i")
 
   const image_urls: string[] = []
@@ -71,7 +71,7 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
     moderation: "low",
     output_format: pick_output_format(opts.output),
   }
-  if (opts.size) payload.size = opts.size
+  payload.size = opts.size ?? "1024x1024"
   if (image_urls.length > 0) payload.images = image_urls.map((url) => ({ image_url: url }))
   if (mask_url) payload.mask = { image_url: mask_url }
 

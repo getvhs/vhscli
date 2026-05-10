@@ -14,7 +14,7 @@ const think_levels = ["minimal", "high"]
 
 type Opts = {
   output?: string
-  image?: string[]
+  i?: string[]
   ratio?: string
   size?: string
   think?: string
@@ -27,7 +27,7 @@ export function register(program: Command) {
     .description("generate an image with nano banana 2")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-nano-banana-2-<timestamp>.png)")
-    .option("-i, --image <path>", "reference image (max 14, repeat -i for more)", collect)
+    .option("-i <path>", "reference image (max 14, repeat -i for more)", collect)
     .addOption(new Option("--ratio <ratio>", "aspect ratio (default: 1:1)").choices(ratios))
     .addOption(new Option("--size <size>", "image size (default: 1K)").choices(sizes))
     .addOption(new Option("--think <level>", "how hard the model thinks (default: minimal)").choices(think_levels))
@@ -58,7 +58,7 @@ async function run(prompt_arg: string, opts: Opts) {
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
-  const images = opts.image ?? []
+  const images = opts.i ?? []
   if (images.length > 14) die("-i accepts at most 14 images")
 
   const parts: Record<string, unknown>[] = [{ text: prompt }]
@@ -69,14 +69,14 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   }
 
   const payload: Record<string, unknown> = { contents: [{ parts }] }
-  const image_config: Record<string, unknown> = {}
-  if (opts.ratio) image_config.aspectRatio = opts.ratio
-  if (opts.size) image_config.imageSize = opts.size
+  const image_config: Record<string, unknown> = {
+    imageSize: opts.size ?? "1K",
+    aspectRatio: opts.ratio ?? "1:1",
+  }
 
-  const gen_config: Record<string, unknown> = {}
-  if (Object.keys(image_config).length > 0) gen_config.imageConfig = image_config
+  const gen_config: Record<string, unknown> = { imageConfig: image_config }
   if (opts.think) gen_config.thinkingConfig = { thinkingLevel: opts.think }
-  if (Object.keys(gen_config).length > 0) payload.generationConfig = gen_config
+  payload.generationConfig = gen_config
 
   if (opts.search || opts.imageSearch) {
     const search_types: Record<string, object> = { webSearch: {} }

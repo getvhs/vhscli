@@ -11,14 +11,14 @@ import { kparse } from "../../lib/parse.js"
 const ratios = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
 const sizes = ["1K", "2K", "4K"]
 
-type Opts = { output?: string; image?: string[]; ratio?: string; size?: string }
+type Opts = { output?: string; i?: string[]; ratio?: string; size?: string }
 
 export function register(program: Command) {
   program.command("nano-banana-pro")
     .description("generate an image with nano banana pro")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-nano-banana-pro-<timestamp>.png)")
-    .option("-i, --image <path>", "reference image (max 14, repeat -i for more)", collect)
+    .option("-i <path>", "reference image (max 14, repeat -i for more)", collect)
     .addOption(new Option("--ratio <ratio>", "aspect ratio (default: 1:1)").choices(ratios))
     .addOption(new Option("--size <size>", "image size (default: 1K)").choices(sizes))
     .showHelpAfterError("(run 'vhscli generate nano-banana-pro --help' for usage)")
@@ -45,7 +45,7 @@ async function run(prompt_arg: string, opts: Opts) {
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
-  const images = opts.image ?? []
+  const images = opts.i ?? []
   if (images.length > 14) die("-i accepts at most 14 images")
 
   const parts: Record<string, unknown>[] = [{ text: prompt }]
@@ -56,10 +56,11 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   }
 
   const payload: Record<string, unknown> = { contents: [{ parts }] }
-  const image_config: Record<string, unknown> = {}
-  if (opts.ratio) image_config.aspectRatio = opts.ratio
-  if (opts.size) image_config.imageSize = opts.size
-  if (Object.keys(image_config).length > 0) payload.generationConfig = { imageConfig: image_config }
+  const image_config: Record<string, unknown> = {
+    imageSize: opts.size ?? "1K",
+    aspectRatio: opts.ratio ?? "1:1",
+  }
+  payload.generationConfig = { imageConfig: image_config }
 
   return kparse(schema.request, payload, "bad nano-banana-pro payload")
 }

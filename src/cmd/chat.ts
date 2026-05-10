@@ -8,15 +8,15 @@ import { upload_file } from "../lib/storage.js"
 import { kparse } from "../lib/parse.js"
 import { create_and_submit, wait_for_task } from "../lib/task.js"
 
-type Opts = { image?: string[]; file?: string[]; video?: string; fps?: number }
+type Opts = { i?: string[]; f?: string[]; v?: string; fps?: number }
 
 export function register_chat(program: Command) {
   program.command("chat")
     .description("chat with ai (seed 2.0; text, image, video, or pdf input)")
     .argument("<prompt>", "your message (use - to read from stdin)")
-    .option("-i, --image <path>", "image to ask about (repeat -i for more)", collect)
-    .option("-f, --file <path>", "pdf document to ask about (repeat -f for more)", collect)
-    .option("-v, --video <path>", "video to ask about")
+    .option("-i <path>", "image to ask about (repeat -i for more)", collect)
+    .option("-f <path>", "pdf document to ask about (repeat -f for more)", collect)
+    .option("-v <path>", "video to ask about")
     .option("--fps <n>", "frames per second sampled from the video: 0.2-5 (default: 1)", parse_fps)
     .showHelpAfterError("(run 'vhscli chat --help' for usage)")
     .addHelpText("after", `
@@ -48,21 +48,21 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
 
   const image_urls: string[] = []
-  for (const img of opts.image ?? []) {
+  for (const img of opts.i ?? []) {
     console.log(`uploading ${img}...`)
     image_urls.push((await upload_image(sess, img)).url)
   }
 
   const file_urls: string[] = []
-  for (const file of opts.file ?? []) {
+  for (const file of opts.f ?? []) {
     console.log(`uploading ${file}...`)
     file_urls.push(await upload_file(sess, file))
   }
 
   let video_url: string | null = null
-  if (opts.video) {
-    console.log(`uploading ${opts.video}...`)
-    video_url = await upload_file(sess, opts.video)
+  if (opts.v) {
+    console.log(`uploading ${opts.v}...`)
+    video_url = await upload_file(sess, opts.v)
   }
 
   const content: Record<string, unknown>[] = []

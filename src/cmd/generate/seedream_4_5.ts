@@ -12,14 +12,14 @@ const sizes = ["2K", "4K"] as const
 const min_pixels = 3_686_400
 const max_pixels = 16_777_216
 
-type Opts = { output?: string; image?: string[]; size?: string }
+type Opts = { output?: string; i?: string[]; size?: string }
 
 export function register(program: Command) {
   program.command("seedream-4-5")
     .description("generate an image with seedream 4.5")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-seedream-4-5-<timestamp>.jpg)")
-    .option("-i, --image <path>", "reference image (max 14, repeat -i for more)", collect)
+    .option("-i <path>", "reference image (max 14, repeat -i for more)", collect)
     .option("--size <size>", "image size: 2K, 4K, or WxH like 1024x1536 (default: 2K)", parse_size)
     .showHelpAfterError("(run 'vhscli generate seedream-4-5 --help' for usage)")
     .addHelpText("after", `
@@ -47,7 +47,7 @@ async function run(prompt_arg: string, opts: Opts) {
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
-  const images = opts.image ?? []
+  const images = opts.i ?? []
   if (images.length > 14) die("-i accepts at most 14 images")
 
   const image_urls: string[] = []
@@ -64,7 +64,7 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   }
   if (image_urls.length === 1) payload.image = image_urls[0]
   else if (image_urls.length > 1) payload.image = image_urls
-  if (opts.size) payload.size = opts.size
+  payload.size = opts.size ?? "2K"
 
   return kparse(schema.request, payload, "bad seedream-4-5 payload")
 }
