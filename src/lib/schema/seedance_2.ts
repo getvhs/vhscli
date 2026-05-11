@@ -31,7 +31,7 @@ export const request = z.object({
   generate_audio: z.boolean().optional(),
   safety_identifier: z.string().max(64).optional(),
   resolution: z.enum(["480p", "720p", "1080p"]).optional(),
-  ratio: z.enum(["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"]).optional(),
+  ratio: z.enum(["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]).optional(),
   duration: z.number().int().min(4).max(15).optional(),
   seed: z.number().int().min(-1).max(4294967295).optional(),
   watermark: z.boolean().optional(),

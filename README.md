@@ -218,7 +218,7 @@ Options:
 - `-i <path>` adds a reference image. Maximum `9`. Conflicts with `--first-frame`.
 - `-v <path>` adds a reference video. Maximum `3`; repeat for more.
 - `-a <path>` adds a reference audio file. Maximum `3`. Requires at least one `-i` or `-v`.
-- `--ratio <ratio>` accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive`. Default is `16:9`.
+- `--ratio <ratio>` accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, or `21:9`. Default is `16:9`.
 - `--resolution <res>` accepts `480p`, `720p`, or `1080p`. Default is `720p`.
 - `--duration <n>` accepts `4` to `15`. Default is `5`.
 - `--audio` / `--no-audio` toggles the audio track. Default is `--audio` (audio on); pass `--no-audio` for a silent video.

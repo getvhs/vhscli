@@ -13,7 +13,7 @@ import { kparse } from "../../lib/parse.js"
 
 type Payload = z.infer<typeof schema.request>
 
-const ratios = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"]
+const ratios = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
 const resolutions = ["480p", "720p", "1080p"]
 
 type Opts = {
