@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from "commander"
 import { die } from "../lib/error.js"
 import { read_prompt } from "../lib/prompt.js"
-import * as schema from "../lib/schema/seed_lite.js"
+import * as schema from "../lib/schema/seed_pro.js"
 import { upload_image } from "../lib/media.js"
 import { get_session, type Session } from "../lib/session.js"
 import { upload_file } from "../lib/storage.js"
@@ -33,7 +33,7 @@ async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
 
-  const task_id = await create_and_submit(sess, "byteplus:seed-2-0-lite", payload)
+  const task_id = await create_and_submit(sess, "byteplus:seed-2-0-pro", payload)
   console.log("thinking...")
   const { result, err } = await wait_for_task(sess, task_id)
   if (err) die(err)
@@ -72,7 +72,7 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   content.push({ type: "input_text", text: prompt })
 
   return kparse(schema.request, {
-    model: "seed-2-0-lite-260228",
+    model: "seed-2-0-pro-260328",
     input: [{ role: "user", content }],
     stream: false,
   }, "bad chat payload")

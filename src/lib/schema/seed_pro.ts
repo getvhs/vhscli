@@ -8,7 +8,7 @@ const content_part = z.discriminatedUnion("type", [
 ])
 
 export const request = z.object({
-  model: z.literal("seed-2-0-lite-260228"),
+  model: z.literal("seed-2-0-pro-260328"),
   input: z.array(z.object({
     role: z.literal("user"),
     content: z.array(content_part).min(1),
