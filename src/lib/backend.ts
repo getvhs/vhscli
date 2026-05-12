@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { die } from "./error.js"
 import { kfetch } from "./http.js"
-import { supabase_anon_key, supabase_url, type Session } from "./session.js"
+import { jwt_payload, load_session, supabase_anon_key, supabase_url, type Session } from "./session.js"
 import { kparse } from "./parse.js"
 
 // our backend uses rpc over http, not rest. every call either succeeds with
@@ -18,6 +18,14 @@ async function invoke<T extends z.ZodType>(
   schema: T,
   timeout_ms: number,
 ): Promise<z.infer<T>> {
+  // long-running poll loops can outlive the supabase access token (1h default).
+  // re-check exp before each call and refresh via load_session if near expiry.
+  const now = Math.floor(Date.now() / 1000)
+  if (jwt_payload(sess.access_token).exp - now < 60) {
+    const fresh = await load_session()
+    if (!fresh) die("session expired, run `vhs login`")
+    sess.access_token = fresh.access_token
+  }
   const res = await kfetch(`${supabase_url}/functions/v1/${fn}`, {
     method: "POST",
     headers: {
