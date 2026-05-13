@@ -3,15 +3,15 @@ import { z } from "zod"
 import { die } from "../../lib/error.js"
 import { save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
-import * as schema from "../../lib/schema/seedance_2.js"
+import * as schema from "../../lib/schema/simple.js"
 import { get_session, type Session } from "../../lib/session.js"
 import { create_and_submit } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
-import { images_to_assets, wait_for_t3_task } from "../../lib/t3.js"
+import { media_to_assets, wait_for_t3_task } from "../../lib/t3.js"
 import { kparse } from "../../lib/parse.js"
 
-type Payload = z.infer<typeof schema.request>
+type Payload = z.infer<typeof schema.simple_video_request>
 
 const ratios = ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
 const resolutions = ["480p", "720p", "1080p"]
@@ -27,7 +27,6 @@ type Opts = {
   ratio?: string
   resolution?: string
   duration?: number
-  seed?: number
 }
 
 export function register(program: Command) {
@@ -45,7 +44,6 @@ export function register(program: Command) {
     .option("--duration <n>", "video length in seconds: 4-15 (default: 5)", parse_duration)
     .option("--audio", "include audio in output (default)", true)
     .option("--no-audio", "make a silent video")
-    .option("--seed <n>", "random seed for reproducible output", parse_seed)
     .showHelpAfterError("(run 'vhscli generate seedance-2 --help' for usage)")
     .addHelpText("after", `
 generates a short video from a text prompt and saves an .mp4 to the
@@ -63,7 +61,7 @@ async function run(prompt_arg: string, opts: Opts) {
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
   const output = opts.output ?? null
-  const task_id = await create_and_submit(sess, "t3:seedance2", payload)
+  const task_id = await create_and_submit(sess, "a1:t3:seedance2", payload)
   console.log("generating video...")
   const { result, err } = await wait_for_t3_task(sess, task_id)
   // t3 forwards to byteplus, which rejects real-face content; retry once
@@ -91,7 +89,6 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   if (videos.length > 3) die("-v accepts at most 3 videos")
   if (audios.length > 3) die("-a accepts at most 3 audios")
 
-  const content: Record<string, unknown>[] = [{ type: "text", text: prompt }]
   const upload_img = async (path: string) => {
     console.log(`uploading ${path}...`)
     return (await upload_image(sess, path)).url
@@ -101,30 +98,40 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
     return upload_file(sess, path)
   }
 
-  if (opts.firstFrame) {
-    content.push({ type: "image_url", image_url: { url: await upload_img(opts.firstFrame) }, role: "first_frame" })
-    if (opts.lastFrame) content.push({ type: "image_url", image_url: { url: await upload_img(opts.lastFrame) }, role: "last_frame" })
-  } else {
-    for (const img of images) content.push({ type: "image_url", image_url: { url: await upload_img(img) }, role: "reference_image" })
-    for (const video of videos) content.push({ type: "video_url", video_url: { url: await upload_av(video) }, role: "reference_video" })
-    for (const audio of audios) content.push({ type: "audio_url", audio_url: { url: await upload_av(audio) }, role: "reference_audio" })
+  const payload: Record<string, unknown> = {
+    prompt,
+    duration: opts.duration ?? 5,
+    output_audio: opts.audio,
+    resolution: opts.resolution ?? "720p",
+    ratio: opts.ratio ?? "16:9",
   }
 
-  const payload: Record<string, unknown> = { model: "seedance-2.0", content }
-  // always set ratio / resolution / duration / generate_audio explicitly
-  // so the provider never picks for us.
-  payload.ratio = opts.ratio ?? "16:9"
-  payload.resolution = opts.resolution ?? "720p"
-  payload.duration = opts.duration ?? 5
-  payload.generate_audio = opts.audio
-  if (opts.seed != null) payload.seed = opts.seed
+  if (opts.firstFrame) {
+    payload.first_frame = await upload_img(opts.firstFrame)
+    if (opts.lastFrame) payload.last_frame = await upload_img(opts.lastFrame)
+  } else if (images.length > 0) {
+    const urls: string[] = []
+    for (const img of images) urls.push(await upload_img(img))
+    payload.input_image = urls
+  }
 
-  return kparse(schema.request, payload, "bad seedance-2 payload")
+  if (videos.length > 0) {
+    const urls: string[] = []
+    for (const v of videos) urls.push(await upload_av(v))
+    payload.input_video = urls
+  }
+  if (audios.length > 0) {
+    const urls: string[] = []
+    for (const a of audios) urls.push(await upload_av(a))
+    payload.input_audio = urls
+  }
+
+  return kparse(schema.simple_video_request, payload, "bad seedance-2 payload")
 }
 
 export async function save(result: unknown, output: string | null) {
-  const url = kparse(schema.response, result, "bad seedance-2 response").url
-  await save_media(url, output, "seedance-2")
+  const r = kparse(schema.simple_video_response, result, "bad seedance-2 response")
+  await save_media(r.video_url, output, "seedance-2")
 }
 
 function is_privacy_error(err: string): boolean {
@@ -134,8 +141,8 @@ function is_privacy_error(err: string): boolean {
 
 async function retry_with_assets(sess: Session, payload: Payload, output: string | null) {
   console.log("input contains real-face content; retrying via t3 virtual-portrait assets...")
-  const asset_payload = await images_to_assets(sess, payload)
-  const task_id = await create_and_submit(sess, "t3:seedance2", asset_payload)
+  const asset_payload = await media_to_assets(sess, payload)
+  const task_id = await create_and_submit(sess, "a1:t3:seedance2", asset_payload)
   console.log("regenerating video...")
   const { result, err } = await wait_for_t3_task(sess, task_id)
   if (err) die(err)
@@ -146,12 +153,6 @@ function parse_duration(value: string) {
   const n = Number(value)
   if (!Number.isInteger(n)) throw new InvalidArgumentError("must be an integer")
   if (n < 4 || n > 15) throw new InvalidArgumentError("must be 4-15")
-  return n
-}
-
-function parse_seed(value: string) {
-  const n = Number(value)
-  if (!Number.isInteger(n)) throw new InvalidArgumentError("must be an integer")
   return n
 }
 

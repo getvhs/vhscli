@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from "commander"
 import { die } from "../../lib/error.js"
 import { save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
-import * as schema from "../../lib/schema/seedream.js"
+import * as schema from "../../lib/schema/simple.js"
 import { get_session, type Session } from "../../lib/session.js"
 import { create_and_submit, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
@@ -38,7 +38,7 @@ async function run(prompt_arg: string, opts: Opts) {
   validate_output(opts.output, "image")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const task_id = await create_and_submit(sess, "byteplus:seedream-5-0", payload)
+  const task_id = await create_and_submit(sess, "a1:byteplus:seedream-5-0", payload)
   console.log("generating image...")
   const { result, err } = await wait_for_task(sess, task_id)
   if (err) die(err)
@@ -50,30 +50,24 @@ async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const images = opts.i ?? []
   if (images.length > 14) die("-i accepts at most 14 images")
 
-  const image_urls: string[] = []
+  const input_image: string[] = []
   for (const img of images) {
     console.log(`uploading ${img}...`)
-    image_urls.push((await upload_image(sess, img)).url)
+    input_image.push((await upload_image(sess, img)).url)
   }
 
   const payload: Record<string, unknown> = {
-    model: "seedream-5-0-260128",
     prompt,
-    response_format: "url",
-    watermark: false,
+    size: opts.size ?? "2K",
   }
-  if (image_urls.length === 1) payload.image = image_urls[0]
-  else if (image_urls.length > 1) payload.image = image_urls
-  payload.size = opts.size ?? "2K"
+  if (input_image.length > 0) payload.input_image = input_image
 
-  return kparse(schema.request, payload, "bad seedream-5 payload")
+  return kparse(schema.simple_image_request, payload, "bad seedream-5 payload")
 }
 
 export async function save(result: unknown, output: string | null) {
-  const item = kparse(schema.response, result, "bad seedream-5 response").data[0]!
-  if (item.error) die(`provider error: ${item.error.message}`)
-  if (!item.url) die("no image url")
-  await save_media(item.url, output, "seedream-5")
+  const r = kparse(schema.simple_image_response, result, "bad seedream-5 response")
+  await save_media(r.image_url, output, "seedream-5")
 }
 
 function parse_size(size: string) {

@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { get_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
 import { validate_output } from "../lib/media.js"
-import { get_session, type Session } from "../lib/session.js"
+import { get_session } from "../lib/session.js"
 import * as gpt_image_2 from "./generate/gpt_image_2.js"
 import * as nano_banana_2 from "./generate/nano_banana_2.js"
 import * as nano_banana_pro from "./generate/nano_banana_pro.js"
@@ -40,7 +40,7 @@ async function run(task_id: string, opts: { output?: string }) {
   let err = row.err
 
   if (!result && !err) {
-    const r = row.endpoint === "t3:seedance2"
+    const r = row.endpoint === "a1:t3:seedance2"
       ? await wait_for_t3_task(sess, task_id)
       : await wait_for_task(sess, task_id)
     result = r.result
@@ -54,26 +54,24 @@ async function run(task_id: string, opts: { output?: string }) {
 
 async function save_result(endpoint: string, result: unknown, output: string | null) {
   switch (endpoint) {
-    case "t3:seedance2": return seedance_2.save(result, output)
-    case "byteplus:seedream-4-5": return seedream_4_5.save(result, output)
-    case "byteplus:seedream-5-0": return seedream_5.save(result, output)
-    case "google:nano_banana_2": return nano_banana_2.save(result, output)
-    case "google:nano_banana_pro": return nano_banana_pro.save(result, output)
-    case "openai:image_generations":
-    case "openai:image_edits": return gpt_image_2.save(result, output)
-    default: die(`unknown endpoint: ${endpoint}`)
+    case "a1:t3:seedance2": return seedance_2.save(result, output)
+    case "a1:byteplus:seedream-4-5": return seedream_4_5.save(result, output)
+    case "a1:byteplus:seedream-5-0": return seedream_5.save(result, output)
+    case "a1:google:nano_banana_2": return nano_banana_2.save(result, output)
+    case "a1:google:nano_banana_pro": return nano_banana_pro.save(result, output)
+    case "a1:openai:gpt_image_2": return gpt_image_2.save(result, output)
+    default: die(`unsupported endpoint: ${endpoint}`)
   }
 }
 
 function endpoint_kind(endpoint: string): "image" | "video" {
   switch (endpoint) {
-    case "t3:seedance2": return "video"
-    case "byteplus:seedream-4-5":
-    case "byteplus:seedream-5-0":
-    case "google:nano_banana_2":
-    case "google:nano_banana_pro":
-    case "openai:image_generations":
-    case "openai:image_edits": return "image"
-    default: die(`unknown endpoint: ${endpoint}`)
+    case "a1:t3:seedance2": return "video"
+    case "a1:byteplus:seedream-4-5":
+    case "a1:byteplus:seedream-5-0":
+    case "a1:google:nano_banana_2":
+    case "a1:google:nano_banana_pro":
+    case "a1:openai:gpt_image_2": return "image"
+    default: die(`unsupported endpoint: ${endpoint}`)
   }
 }

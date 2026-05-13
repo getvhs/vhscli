@@ -2,7 +2,7 @@ import { z } from "zod"
 import * as backend from "./backend.js"
 import { get_task } from "./db.js"
 import { die } from "./error.js"
-import * as schema from "./schema/seedance_2.js"
+import * as schema from "./schema/simple.js"
 import { type Session } from "./session.js"
 
 // drives /poll/t3 (pull-based) until the task finalizes, then loads
@@ -23,29 +23,32 @@ export async function wait_for_t3_task(
   return { result: row.result, err: row.err }
 }
 
-// rewrite each image_url/video_url in a seedance-2 payload to point at a
-// t3 virtual-portrait asset (asset://…). text and audio entries pass
-// through. used as the privacy-error fallback: t3 passthrough sends image
-// urls straight to byteplus, which trips the real-face filter; reuploading
-// as t3 assets routes through the byteplus virtual-portrait path that
-// accepts real faces.
-export async function images_to_assets(
+// rewrite every image / video url in a simple seedance-2 payload to point at
+// a t3 virtual-portrait asset (asset://…). used as the privacy-error
+// fallback: t3 passthrough sends urls straight to byteplus, which trips the
+// real-face filter for both images and videos; reuploading as t3 assets
+// routes through the virtual-portrait path that accepts real faces. t3
+// new_asset accepts jpeg / png / mp4 (see vhs-main t3/index.ts). audio urls
+// pass through.
+export async function media_to_assets(
   sess: Session,
-  payload: z.infer<typeof schema.request>,
+  payload: z.infer<typeof schema.simple_video_request>,
 ): Promise<Record<string, unknown>> {
-  const new_content: Record<string, unknown>[] = []
-  for (const c of payload.content) {
-    if (c.type === "image_url") {
-      console.log(`creating t3 asset from ${c.image_url.url}...`)
-      const { asset_id } = await backend.new_asset(sess, c.image_url.url)
-      new_content.push({ ...c, image_url: { url: `asset://${asset_id}` } })
-    } else if (c.type === "video_url") {
-      console.log(`creating t3 asset from ${c.video_url.url}...`)
-      const { asset_id } = await backend.new_asset(sess, c.video_url.url)
-      new_content.push({ ...c, video_url: { url: `asset://${asset_id}` } })
-    } else {
-      new_content.push(c)
-    }
+  const wrap = async (url: string) => {
+    console.log(`creating t3 asset from ${url}...`)
+    const { asset_id } = await backend.new_asset(sess, url)
+    return `asset://${asset_id}`
   }
-  return { ...payload, content: new_content }
+  const wrap_list = async (urls: string[]) => {
+    const out: string[] = []
+    for (const u of urls) out.push(await wrap(u))
+    return out
+  }
+
+  const out: Record<string, unknown> = { ...payload }
+  if (payload.input_image) out.input_image = await wrap_list(payload.input_image)
+  if (payload.input_video) out.input_video = await wrap_list(payload.input_video)
+  if (payload.first_frame) out.first_frame = await wrap(payload.first_frame)
+  if (payload.last_frame) out.last_frame = await wrap(payload.last_frame)
+  return out
 }

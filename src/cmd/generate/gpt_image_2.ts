@@ -2,19 +2,18 @@ import { Command, InvalidArgumentError } from "commander"
 import { die } from "../../lib/error.js"
 import { save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
-import * as schema from "../../lib/schema/gpt_image_2.js"
+import * as schema from "../../lib/schema/simple.js"
 import { get_session, type Session } from "../../lib/session.js"
 import { create_and_submit, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
 
 const size_presets = ["1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
-const ext_format: Record<string, "png" | "jpeg" | "webp"> = { png: "png", jpg: "jpeg", jpeg: "jpeg", webp: "webp" }
 const min_pixels = 655_360
 const max_pixels = 8_294_400
 const max_edge = 3840
 
-type Opts = { output?: string; i?: string[]; mask?: string; size?: string }
+type Opts = { output?: string; i?: string[]; size?: string }
 
 export function register(program: Command) {
   program.command("gpt-image-2")
@@ -22,13 +21,11 @@ export function register(program: Command) {
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-gpt-image-2-<timestamp>.png)")
     .option("-i <path>", "reference image for edits (repeat -i for more)", collect)
-    .option("--mask <path>", "edit mask (png with transparent pixels marking edit regions); requires -i")
     .option("--size <size>", "image size: preset or WxH (default: 1024x1024)", parse_size)
     .showHelpAfterError("(run 'vhscli generate gpt-image-2 --help' for usage)")
     .addHelpText("after", `
 generates one image from a text prompt and saves it to the current
 folder. pass reference images with -i to edit or compose from them.
---mask takes a png where transparent pixels mark the area to edit.
 
 examples:
   vhscli generate gpt-image-2 "a children's book drawing of a veterinarian examining a cat"
@@ -40,8 +37,7 @@ async function run(prompt_arg: string, opts: Opts) {
   validate_output(opts.output, "image")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const endpoint = payload.images?.length ? "openai:image_edits" : "openai:image_generations"
-  const task_id = await create_and_submit(sess, endpoint, payload)
+  const task_id = await create_and_submit(sess, "a1:openai:gpt_image_2", payload)
   console.log("generating image...")
   const { result, err } = await wait_for_task(sess, task_id)
   if (err) die(err)
@@ -51,47 +47,25 @@ async function run(prompt_arg: string, opts: Opts) {
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
   const prompt = await read_prompt(prompt_arg)
   const images = opts.i ?? []
-  if (opts.mask && images.length === 0) die("--mask requires -i")
 
-  const image_urls: string[] = []
+  const input_image: string[] = []
   for (const img of images) {
     console.log(`uploading ${img}...`)
-    image_urls.push((await upload_image(sess, img)).url)
-  }
-
-  let mask_url: string | undefined
-  if (opts.mask) {
-    console.log(`uploading ${opts.mask}...`)
-    mask_url = (await upload_image(sess, opts.mask)).url
+    input_image.push((await upload_image(sess, img)).url)
   }
 
   const payload: Record<string, unknown> = {
-    model: "gpt-image-2",
     prompt,
-    moderation: "low",
-    output_format: pick_output_format(opts.output),
+    size: opts.size ?? "1024x1024",
   }
-  payload.size = opts.size ?? "1024x1024"
-  if (image_urls.length > 0) payload.images = image_urls.map((url) => ({ image_url: url }))
-  if (mask_url) payload.mask = { image_url: mask_url }
+  if (input_image.length > 0) payload.input_image = input_image
 
-  return kparse(schema.request, payload, "bad gpt-image-2 payload")
+  return kparse(schema.simple_image_request, payload, "bad gpt-image-2 payload")
 }
 
 export async function save(result: unknown, output: string | null) {
-  const item = kparse(schema.response, result, "bad gpt-image-2 response").data[0]!
-  await save_media(item.url, output, "gpt-image-2")
-}
-
-function pick_output_format(output?: string) {
-  if (!output) return "png" as const
-  const dot = output.lastIndexOf(".")
-  if (dot < 0) die(`no extension: ${output}`)
-
-  const ext = output.slice(dot + 1).toLowerCase()
-  const format = ext_format[ext]
-  if (!format) die(`unsupported output ext: ${ext}`)
-  return format
+  const r = kparse(schema.simple_image_response, result, "bad gpt-image-2 response")
+  await save_media(r.image_url, output, "gpt-image-2")
 }
 
 function parse_size(size: string) {
