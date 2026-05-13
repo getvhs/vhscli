@@ -1,15 +1,16 @@
 import { Command, InvalidArgumentError, Option } from "commander"
 import { z } from "zod"
 import { die } from "../../lib/error.js"
-import { save_media, validate_output } from "../../lib/media.js"
+import { default_output, save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/simple.js"
 import { get_session, type Session } from "../../lib/session.js"
-import { create_and_submit } from "../../lib/task.js"
+import { create_and_submit, type Mode } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { upload_file } from "../../lib/storage.js"
 import { media_to_assets, wait_for_t3_task } from "../../lib/t3.js"
 import { kparse } from "../../lib/parse.js"
+import { remove_vhs_task, write_vhs_task } from "../../lib/vhs_task.js"
 
 type Payload = z.infer<typeof schema.simple_video_request>
 
@@ -29,9 +30,9 @@ type Opts = {
   duration?: number
 }
 
-export function register(program: Command) {
-  program.command("seedance-2")
-    .description("generate a video with seedance 2.0")
+export function register(parent: Command, mode: Mode) {
+  parent.command("seedance-2")
+    .description(mode === "submit" ? "submit a seedance 2.0 video task" : "generate a video with seedance 2.0")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-seedance-2-<timestamp>.mp4)")
     .option("--first-frame <image>", "use as the first frame")
@@ -44,24 +45,26 @@ export function register(program: Command) {
     .option("--duration <n>", "video length in seconds: 4-15 (default: 5)", parse_duration)
     .option("--audio", "include audio in output (default)", true)
     .option("--no-audio", "make a silent video")
-    .showHelpAfterError("(run 'vhscli generate seedance-2 --help' for usage)")
+    .showHelpAfterError(`(run 'vhscli ${mode} seedance-2 --help' for usage)`)
     .addHelpText("after", `
 generates a short video from a text prompt and saves an .mp4 to the
-current folder. videos can take minutes; keep the task id and run
-'vhscli resume <task_id>' if you stop the command.
+current folder. videos can take minutes; if you stop the command, run
+'vhscli resume <output>.vhs_task' to wait for it.
 
 examples:
-  vhscli generate seedance-2 "a woman in a red dress walks through a rainy neon-lit alley, slow tracking shot"
-  vhscli generate seedance-2 "animate this photo: gentle pan to the right" --first-frame photo.jpg`)
-    .action(run)
+  vhscli ${mode} seedance-2 "a woman in a red dress walks through a rainy neon-lit alley, slow tracking shot"
+  vhscli ${mode} seedance-2 "animate this photo: gentle pan to the right" --first-frame photo.jpg`)
+    .action((prompt_arg, opts) => run(prompt_arg, opts, mode))
 }
 
-async function run(prompt_arg: string, opts: Opts) {
+async function run(prompt_arg: string, opts: Opts, mode: Mode) {
   validate_output(opts.output, "video")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
-  const output = opts.output ?? null
+  const output = opts.output ?? default_output("seedance-2", "mp4")
   const task_id = await create_and_submit(sess, "a1:t3:seedance2", payload)
+  await write_vhs_task(output, task_id)
+  if (mode === "submit") return
   console.log("generating video...")
   const { result, err } = await wait_for_t3_task(sess, task_id)
   // t3 forwards to byteplus, which rejects real-face content; retry once
@@ -71,9 +74,11 @@ async function run(prompt_arg: string, opts: Opts) {
       await retry_with_assets(sess, payload, output)
       return
     }
+    await remove_vhs_task(output)
     die(err)
   }
   await save(result, output)
+  await remove_vhs_task(output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {
@@ -139,14 +144,19 @@ function is_privacy_error(err: string): boolean {
     err.includes("InputVideoSensitiveContentDetected.PrivacyInformation")
 }
 
-async function retry_with_assets(sess: Session, payload: Payload, output: string | null) {
+async function retry_with_assets(sess: Session, payload: Payload, output: string) {
   console.log("input contains real-face content; retrying via t3 virtual-portrait assets...")
   const asset_payload = await media_to_assets(sess, payload)
   const task_id = await create_and_submit(sess, "a1:t3:seedance2", asset_payload)
+  await write_vhs_task(output, task_id)
   console.log("regenerating video...")
   const { result, err } = await wait_for_t3_task(sess, task_id)
-  if (err) die(err)
+  if (err) {
+    await remove_vhs_task(output)
+    die(err)
+  }
   await save(result, output)
+  await remove_vhs_task(output)
 }
 
 function parse_duration(value: string) {

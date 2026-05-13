@@ -1,12 +1,13 @@
 import { Command, InvalidArgumentError } from "commander"
 import { die } from "../../lib/error.js"
-import { save_media, validate_output } from "../../lib/media.js"
+import { default_output, save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/simple.js"
 import { get_session, type Session } from "../../lib/session.js"
-import { create_and_submit, wait_for_task } from "../../lib/task.js"
+import { create_and_submit, type Mode, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
+import { remove_vhs_task, write_vhs_task } from "../../lib/vhs_task.js"
 
 const size_presets = ["1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160"]
 const min_pixels = 655_360
@@ -15,33 +16,40 @@ const max_edge = 3840
 
 type Opts = { output?: string; i?: string[]; size?: string }
 
-export function register(program: Command) {
-  program.command("gpt-image-2")
-    .description("generate or edit an image with openai gpt-image-2")
+export function register(parent: Command, mode: Mode) {
+  parent.command("gpt-image-2")
+    .description(mode === "submit" ? "submit an openai gpt-image-2 task" : "generate or edit an image with openai gpt-image-2")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-gpt-image-2-<timestamp>.png)")
     .option("-i <path>", "reference image for edits (repeat -i for more)", collect)
     .option("--size <size>", "image size: preset or WxH (default: 1024x1024)", parse_size)
-    .showHelpAfterError("(run 'vhscli generate gpt-image-2 --help' for usage)")
+    .showHelpAfterError(`(run 'vhscli ${mode} gpt-image-2 --help' for usage)`)
     .addHelpText("after", `
 generates one image from a text prompt and saves it to the current
 folder. pass reference images with -i to edit or compose from them.
 
 examples:
-  vhscli generate gpt-image-2 "a children's book drawing of a veterinarian examining a cat"
-  vhscli generate gpt-image-2 "replace the background with a starry night" -i photo.jpg`)
-    .action(run)
+  vhscli ${mode} gpt-image-2 "a children's book drawing of a veterinarian examining a cat"
+  vhscli ${mode} gpt-image-2 "replace the background with a starry night" -i photo.jpg`)
+    .action((prompt_arg, opts) => run(prompt_arg, opts, mode))
 }
 
-async function run(prompt_arg: string, opts: Opts) {
+async function run(prompt_arg: string, opts: Opts, mode: Mode) {
   validate_output(opts.output, "image")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
+  const output = opts.output ?? default_output("gpt-image-2", "png")
   const task_id = await create_and_submit(sess, "a1:openai:gpt_image_2", payload)
+  await write_vhs_task(output, task_id)
+  if (mode === "submit") return
   console.log("generating image...")
   const { result, err } = await wait_for_task(sess, task_id)
-  if (err) die(err)
-  await save(result, opts.output ?? null)
+  if (err) {
+    await remove_vhs_task(output)
+    die(err)
+  }
+  await save(result, output)
+  await remove_vhs_task(output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {

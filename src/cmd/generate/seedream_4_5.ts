@@ -1,12 +1,13 @@
 import { Command, InvalidArgumentError } from "commander"
 import { die } from "../../lib/error.js"
-import { save_media, validate_output } from "../../lib/media.js"
+import { default_output, save_media, validate_output } from "../../lib/media.js"
 import { read_prompt } from "../../lib/prompt.js"
 import * as schema from "../../lib/schema/simple.js"
 import { get_session, type Session } from "../../lib/session.js"
-import { create_and_submit, wait_for_task } from "../../lib/task.js"
+import { create_and_submit, type Mode, wait_for_task } from "../../lib/task.js"
 import { upload_image } from "../../lib/media.js"
 import { kparse } from "../../lib/parse.js"
+import { remove_vhs_task, write_vhs_task } from "../../lib/vhs_task.js"
 
 const sizes = ["2K", "4K"] as const
 const min_pixels = 3_686_400
@@ -14,14 +15,14 @@ const max_pixels = 16_777_216
 
 type Opts = { output?: string; i?: string[]; size?: string }
 
-export function register(program: Command) {
-  program.command("seedream-4-5")
-    .description("generate an image with seedream 4.5")
+export function register(parent: Command, mode: Mode) {
+  parent.command("seedream-4-5")
+    .description(mode === "submit" ? "submit a seedream 4.5 image task" : "generate an image with seedream 4.5")
     .argument("<prompt>", "what to generate (use - to read from stdin)")
     .option("-o, --output <path>", "output file path (default: ./vhscli-seedream-4-5-<timestamp>.jpg)")
     .option("-i <path>", "reference image (max 14, repeat -i for more)", collect)
     .option("--size <size>", "image size: 2K, 4K, or WxH like 1024x1536 (default: 2K)", parse_size)
-    .showHelpAfterError("(run 'vhscli generate seedream-4-5 --help' for usage)")
+    .showHelpAfterError(`(run 'vhscli ${mode} seedream-4-5 --help' for usage)`)
     .addHelpText("after", `
 generates one image from a text prompt and saves a .jpg to the current
 folder. pass reference images with -i (repeat -i for more, up to 14)
@@ -29,20 +30,27 @@ to guide style, characters, or composition. --size accepts presets
 ("2K", "4K") or exact dimensions like "1024x1536".
 
 examples:
-  vhscli generate seedream-4-5 "an open refrigerator with milk, eggs, leftover chicken, strawberries; warm light"
-  vhscli generate seedream-4-5 "swap the dress to red, keep her pose unchanged" -i photo.jpg`)
-    .action(run)
+  vhscli ${mode} seedream-4-5 "an open refrigerator with milk, eggs, leftover chicken, strawberries; warm light"
+  vhscli ${mode} seedream-4-5 "swap the dress to red, keep her pose unchanged" -i photo.jpg`)
+    .action((prompt_arg, opts) => run(prompt_arg, opts, mode))
 }
 
-async function run(prompt_arg: string, opts: Opts) {
+async function run(prompt_arg: string, opts: Opts, mode: Mode) {
   validate_output(opts.output, "image")
   const sess = await get_session()
   const payload = await parse_opts(sess, prompt_arg, opts)
+  const output = opts.output ?? default_output("seedream-4-5", "jpg")
   const task_id = await create_and_submit(sess, "a1:byteplus:seedream-4-5", payload)
+  await write_vhs_task(output, task_id)
+  if (mode === "submit") return
   console.log("generating image...")
   const { result, err } = await wait_for_task(sess, task_id)
-  if (err) die(err)
-  await save(result, opts.output ?? null)
+  if (err) {
+    await remove_vhs_task(output)
+    die(err)
+  }
+  await save(result, output)
+  await remove_vhs_task(output)
 }
 
 async function parse_opts(sess: Session, prompt_arg: string, opts: Opts) {

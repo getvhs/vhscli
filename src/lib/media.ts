@@ -93,7 +93,7 @@ export async function detect_mime(path: string) {
   return result.mime
 }
 
-function default_output(model: string, ext: string) {
+export function default_output(model: string, ext: string) {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, "0")
   const ts = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`

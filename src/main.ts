@@ -23,6 +23,7 @@ examples:
   vhscli models
   vhscli generate seedream-5 "a corgi astronaut riding a bicycle on mars"
   vhscli generate seedance-2 "a robot dancing in tokyo at night, slow tracking shot"
+  vhscli submit  seedance-2 "..." -o clip.mp4 && vhscli resume clip.mp4.vhs_task
   vhscli chat "summarize this paper in 5 bullets; include page numbers." -f paper.pdf
   cat prompt.txt | vhscli generate gpt-image-2 -`
 
@@ -58,12 +59,28 @@ const generate = program.command("generate")
   .addHelpText("after", "\nrun 'vhscli generate <model> --help' to see options for a specific model.")
   .action(function () { this.help() })
 
-seedance_2.register(generate)
-seedream_5.register(generate)
-seedream_4_5.register(generate)
-nano_banana_2.register(generate)
-nano_banana_pro.register(generate)
-gpt_image_2.register(generate)
+const submit = program.command("submit")
+  .description("submit a task and exit; finish later with 'vhscli resume'")
+  .showHelpAfterError("(run 'vhscli submit --help' to list models, or 'vhscli submit <model> --help' for model options)")
+  .addHelpText("after", `
+'submit' takes the same models and options as 'generate', but writes a
+<output>.vhs_task sidecar and exits without waiting. resume the task
+later with 'vhscli resume <output>.vhs_task'.
+
+example:
+  vhscli submit seedance-2 "..." -o clip.mp4
+  vhscli resume clip.mp4.vhs_task`)
+  .action(function () { this.help() })
+
+for (const parent of [generate, submit] as const) {
+  const mode = parent === generate ? "generate" : "submit"
+  seedance_2.register(parent, mode)
+  seedream_5.register(parent, mode)
+  seedream_4_5.register(parent, mode)
+  nano_banana_2.register(parent, mode)
+  nano_banana_pro.register(parent, mode)
+  gpt_image_2.register(parent, mode)
+}
 register_chat(program)
 register_resume(program)
 

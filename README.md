@@ -71,15 +71,27 @@ Ask a model subcommand for its exact flags:
 vhscli generate gpt-image-2 --help
 ```
 
-Generation commands print a `task_id` before waiting for output. Keep it; it is the durable handle for resume.
+Generation commands write a `<output>.vhs_task` sidecar (JSON `{"id": "<task_id>"}`) next to the intended output as soon as the task is submitted, then delete it when the media is saved or the task errors. If the process is aborted mid-flight, the sidecar is what `resume` picks up to finish the job.
 
-### `vhscli resume <task_id>`
+### `vhscli submit <model> [options]`
 
-Reads the result for an existing generation task.
+Same models and options as `generate`, but it only submits the task and writes the `.vhs_task` sidecar, then exits without waiting.
 
 ```sh
-vhscli resume 8f3a1b2c-9e0f-4a1b-9c8d-1e2f3a4b5c6d
-vhscli resume 8f3a1b2c-9e0f-4a1b-9c8d-1e2f3a4b5c6d -o out.mp4
+vhscli submit seedance-2 "a robot dancing in tokyo at night" -o clip.mp4
+# writes clip.mp4.vhs_task and exits
+
+vhscli resume clip.mp4.vhs_task
+# waits for the task to finish, writes clip.mp4, removes the sidecar
+```
+
+### `vhscli resume <files...>`
+
+Finishes one or more aborted generations from their `.vhs_task` sidecar files. Waits if the task is still running, saves the media to the path implied by the sidecar filename (`clip.mp4.vhs_task` → `clip.mp4`), and removes the sidecar.
+
+```sh
+vhscli resume clip.mp4.vhs_task
+vhscli resume a.jpg.vhs_task b.jpg.vhs_task
 ```
 
 The server job keeps running after the local process exits. `resume` attaches the CLI back to that task and writes the result when it is ready.
@@ -224,7 +236,7 @@ Options:
 - `--audio` / `--no-audio` toggles the audio track. Default is `--audio` (audio on); pass `--no-audio` for a silent video.
 - `--seed <n>` sets a random seed.
 
-The command polls until the result is ready and prints progress dots. If the process stops, use `vhscli resume <task_id>`.
+The command polls until the result is ready and prints progress dots. If the process stops, use `vhscli resume <output>.vhs_task` to finish it. Or use `vhscli submit` instead of `vhscli generate` to detach immediately and resume later.
 
 ## Files And Output
 
@@ -277,6 +289,7 @@ src/
     storage.ts    # upload_file (supabase storage)
     t3.ts         # token360 path for seedance-2 (poll + asset retry on real-face err)
     task.ts       # create_and_submit (insert + submit)
+    vhs_task.ts   # write/read/remove <output>.vhs_task sidecar
     schema/       # one file per model: request + response
 ```
 
@@ -297,7 +310,7 @@ Generation and chat share the same server handoff:
 
 The CLI never calls model providers directly. The `task2` row is the durable job record; `backend.submit2` is the only server entry point for model execution.
 
-Long jobs can finish after the local process exits. `vhscli resume <task_id>` re-attaches via the same `wait_for_task` / `wait_for_t3_task` helpers, then reads the final `task2` row through `db.get_task` and saves output through the endpoint-specific result parser.
+As soon as the task id is known (step 4), the CLI writes a `<output>.vhs_task` JSON sidecar so an aborted run is recoverable. The sidecar is removed once the media is saved or the task errors. `vhscli submit` stops right after the sidecar is written; `vhscli resume <file.vhs_task>` re-attaches via the same `wait_for_task` / `wait_for_t3_task` helpers, then reads the final `task2` row through `db.get_task` and saves output through the endpoint-specific result parser.
 
 ## Design Decisions
 

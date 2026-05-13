@@ -2,6 +2,10 @@ import * as backend from "./backend.js"
 import { insert_task } from "./db.js"
 import { type Session } from "./session.js"
 
+// "generate" runs the full flow (submit → wait → save). "submit" stops after
+// writing the .vhs_task sidecar so the user can pick it up via `vhscli resume`.
+export type Mode = "generate" | "submit"
+
 // insert task2 row + non-blocking submit2. returns task_id; caller waits via
 // wait_for_task (or poll_t3 loop for the t3 endpoint).
 export async function create_and_submit(

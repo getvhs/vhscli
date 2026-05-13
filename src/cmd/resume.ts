@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { get_task } from "../lib/db.js"
 import { die } from "../lib/error.js"
 import { validate_output } from "../lib/media.js"
-import { get_session } from "../lib/session.js"
+import { get_session, type Session } from "../lib/session.js"
 import * as gpt_image_2 from "./generate/gpt_image_2.js"
 import * as nano_banana_2 from "./generate/nano_banana_2.js"
 import * as nano_banana_pro from "./generate/nano_banana_pro.js"
@@ -11,29 +11,35 @@ import * as seedream_4_5 from "./generate/seedream_4_5.js"
 import * as seedream_5 from "./generate/seedream_5.js"
 import { wait_for_t3_task } from "../lib/t3.js"
 import { wait_for_task } from "../lib/task.js"
+import { read_vhs_task, remove_vhs_task } from "../lib/vhs_task.js"
 
 export function register_resume(program: Command) {
   program.command("resume")
-    .description("finish a generation that was aborted, by task id")
-    .argument("<task_id>", "task id printed by 'vhscli generate'")
-    .option("-o, --output <path>", "output file path (default: ./vhscli-<model>-<timestamp>.<ext>)")
+    .description("finish aborted generations from their .vhs_task sidecar files")
+    .argument("<files...>", ".vhs_task files (e.g. clip.mp4.vhs_task)")
     .showHelpAfterError("(run 'vhscli resume --help' for usage)")
     .addHelpText("after", `
-some jobs take minutes. if you stop the command, paste the printed task
-id into 'vhscli resume <task_id>' to wait for it and download the result.
+each generate or submit writes a <output>.vhs_task sidecar next to the
+intended output. resume waits for the task to finish, saves the media
+to <output>, and removes the sidecar.
 
 examples:
-  vhscli resume 8f3a1b2c-9e0f-4a1b-9c8d-1e2f3a4b5c6d
-  vhscli resume 8f3a1b2c-9e0f-4a1b-9c8d-1e2f3a4b5c6d -o out.mp4`)
+  vhscli resume clip.mp4.vhs_task
+  vhscli resume a.jpg.vhs_task b.jpg.vhs_task`)
     .action(run)
 }
 
-async function run(task_id: string, opts: { output?: string }) {
+async function run(files: string[]) {
   const sess = await get_session()
+  for (const file of files) await resume_one(sess, file)
+}
+
+async function resume_one(sess: Session, file: string) {
+  const { id: task_id, output } = await read_vhs_task(file)
   const row = await get_task(sess, task_id)
   if (!row) die(`task not found: ${task_id}`)
   if (!row.endpoint) die("task has no endpoint")
-  validate_output(opts.output, endpoint_kind(row.endpoint))
+  validate_output(output, endpoint_kind(row.endpoint))
 
   // already finalized (e.g. resume run twice): skip the wait.
   let result = row.result as unknown
@@ -47,12 +53,16 @@ async function run(task_id: string, opts: { output?: string }) {
     err = r.err
   }
 
-  if (err) die(err)
+  if (err) {
+    await remove_vhs_task(output)
+    die(err)
+  }
   if (!result) die("task completed without result")
-  await save_result(row.endpoint, result, opts.output ?? null)
+  await save_result(row.endpoint, result, output)
+  await remove_vhs_task(output)
 }
 
-async function save_result(endpoint: string, result: unknown, output: string | null) {
+async function save_result(endpoint: string, result: unknown, output: string) {
   switch (endpoint) {
     case "a1:t3:seedance2": return seedance_2.save(result, output)
     case "a1:byteplus:seedream-4-5": return seedream_4_5.save(result, output)
