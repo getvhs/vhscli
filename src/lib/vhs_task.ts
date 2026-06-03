@@ -10,11 +10,11 @@ const suffix = ".vhs_task"
 
 const vhs_task_file = z.object({ id: z.string() })
 
-export function vhs_task_path(output: string) {
+function vhs_task_path(output: string) {
   return output + suffix
 }
 
-export function output_from_vhs_task_path(path: string) {
+function output_from_vhs_task_path(path: string) {
   if (!path.endsWith(suffix)) die(`not a .vhs_task file: ${path}`)
   return path.slice(0, -suffix.length)
 }

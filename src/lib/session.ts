@@ -14,7 +14,7 @@ export const supabase_url = "https://hlraysuoesqgfvowfkav.supabase.co"
 export const supabase_anon_key = "sb_publishable_MhbhQH2mzTf7ZhULB3zvqg_4XqUibrt"
 
 const vhs_dir = join(homedir(), ".vhs")
-export const session_path = join(vhs_dir, "session.json")
+const session_path = join(vhs_dir, "session.json")
 
 // seconds of remaining lifetime below which we refresh ahead of expiry.
 const REFRESH_SKEW_S = 60
@@ -34,7 +34,7 @@ export function auth_headers(sess: Session) {
   }
 }
 
-export const creds = z.object({
+const creds = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
 })
@@ -52,7 +52,7 @@ const refresh_response_schema = z.looseObject({
   refresh_token: z.string(),
 })
 
-export async function save_creds(access_token: string, refresh_token: string) {
+async function save_creds(access_token: string, refresh_token: string) {
   await mkdir(vhs_dir, { recursive: true })
   const tmp = `${session_path}.${process.pid}.tmp`
   await writeFile(tmp, JSON.stringify({ access_token, refresh_token }, null, 2) + "\n")
@@ -181,7 +181,7 @@ async function get_fresh_creds(): Promise<Creds | null> {
 
 // Drop any in-flight refresh — call after login/logout so the next read
 // picks up the freshly written (or now-absent) session file.
-export function clear_session_cache() {
+function clear_session_cache() {
   refreshing = null
 }
 
