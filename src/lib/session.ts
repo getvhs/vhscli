@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import lockfile from "proper-lockfile"
 import { z } from "zod"
 import * as backend from "./backend.js"
 import { die } from "./error.js"
@@ -14,6 +15,11 @@ export const supabase_anon_key = "sb_publishable_MhbhQH2mzTf7ZhULB3zvqg_4XqUibrt
 
 const vhs_dir = join(homedir(), ".vhs")
 export const session_path = join(vhs_dir, "session.json")
+
+// seconds of remaining lifetime below which we refresh ahead of expiry.
+const REFRESH_SKEW_S = 60
+const REFRESH_FETCH_MS = 15_000
+const LOCK_STALE_MS = 20_000
 
 export type Session = {
   user_id: string
@@ -32,6 +38,8 @@ export const creds = z.object({
   access_token: z.string(),
   refresh_token: z.string(),
 })
+
+type Creds = z.infer<typeof creds>
 
 const jwt_payload_schema = z.looseObject({
   sub: z.string(),
@@ -52,6 +60,7 @@ export async function save_creds(access_token: string, refresh_token: string) {
 }
 
 export async function delete_creds() {
+  clear_session_cache()
   await rm(session_path, { force: true })
 }
 
@@ -68,6 +77,114 @@ export function jwt_payload(token: string) {
   return kparse(jwt_payload_schema, data, "bad token")
 }
 
+function token_exp(access_token: string): number | null {
+  const payload = access_token.split(".")[1]
+  if (!payload) return null
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString())
+    const parsed = jwt_payload_schema.safeParse(data)
+    if (!parsed.success) return null
+    return parsed.data.exp
+  } catch {
+    return null
+  }
+}
+
+function near_expiry(access_token: string) {
+  const exp = token_exp(access_token)
+  if (exp === null) return true
+  return exp - Math.floor(Date.now() / 1000) < REFRESH_SKEW_S
+}
+
+async function read_creds(): Promise<Creds | null> {
+  let raw: unknown
+  try {
+    raw = JSON.parse(await readFile(session_path, "utf8"))
+  } catch (err) {
+    if (is_enoent(err)) return null
+    throw err
+  }
+  return kparse(creds, raw, "bad session")
+}
+
+function lock_session() {
+  return lockfile.lock(session_path, {
+    stale: LOCK_STALE_MS,
+    realpath: false,
+    onCompromised: (err) => console.error("session lock compromised:", err),
+    retries: {
+      retries: 12,
+      factor: 1.6,
+      minTimeout: 100,
+      maxTimeout: 3_000,
+      randomize: true,
+    },
+  })
+}
+
+async function exchange_refresh_token(refresh_token: string): Promise<Creds | null> {
+  const res = await kfetch(`${supabase_url}/auth/v1/token?grant_type=refresh_token`, {
+    method: "POST",
+    headers: { apikey: supabase_anon_key, "content-type": "application/json" },
+    body: JSON.stringify({ refresh_token }),
+    timeout_ms: REFRESH_FETCH_MS,
+  })
+
+  if (res.status === 400 || res.status === 401) return null
+  if (!res.ok) die(`refresh failed: ${res.status}`)
+  return kparse(refresh_response_schema, await res.json(), "bad refresh response")
+}
+
+// Re-reads under the lock and refreshes only if the same expiring token is
+// still on disk; otherwise adopts whatever a sibling already wrote.
+async function refresh_locked(seen: Creds): Promise<Creds | null> {
+  let release: (() => Promise<void>) | null = null
+  try {
+    release = await lock_session()
+  } catch (err) {
+    if (is_enoent(err)) return null
+    throw err
+  }
+  try {
+    const fresh = await read_creds()
+    if (!fresh) return null
+    if (fresh.access_token !== seen.access_token || !near_expiry(fresh.access_token)) {
+      return fresh
+    }
+    const next = await exchange_refresh_token(fresh.refresh_token)
+    if (!next) return null
+    await save_creds(next.access_token, next.refresh_token)
+    return next
+  } finally {
+    await release().catch(() => {})
+  }
+}
+
+// Collapses concurrent in-process callers onto one refresh before any of
+// them reach for the file lock.
+let refreshing: Promise<Creds | null> | null = null
+
+async function get_fresh_creds(): Promise<Creds | null> {
+  const current = await read_creds()
+  if (!current) {
+    refreshing = null
+    return null
+  }
+  if (!near_expiry(current.access_token)) return current
+  if (!refreshing) {
+    refreshing = refresh_locked(current).finally(() => {
+      refreshing = null
+    })
+  }
+  return refreshing
+}
+
+// Drop any in-flight refresh — call after login/logout so the next read
+// picks up the freshly written (or now-absent) session file.
+export function clear_session_cache() {
+  refreshing = null
+}
+
 export async function get_session() {
   const existing = await load_session()
   if (existing) return existing
@@ -81,45 +198,16 @@ export async function get_session() {
 }
 
 export async function load_session(): Promise<Session | null> {
-  let raw: unknown
-  try {
-    raw = JSON.parse(await readFile(session_path, "utf8"))
-  } catch (err) {
-    if (is_enoent(err)) return null
-    throw err
-  }
-
-  let parsed = kparse(creds, raw, "bad session")
-  const now = Math.floor(Date.now() / 1000)
-  if (jwt_payload(parsed.access_token).exp - now < 60) {
-    const refreshed = await refresh_session(parsed.refresh_token)
-    if (!refreshed) return null
-    parsed = refreshed
-    await save_creds(parsed.access_token, parsed.refresh_token)
-  }
+  const parsed = await get_fresh_creds()
+  if (!parsed) return null
 
   const payload = jwt_payload(parsed.access_token)
   return { access_token: parsed.access_token, user_id: payload.sub, email: payload.email }
 }
 
-async function refresh_session(refresh_token: string) {
-  const res = await kfetch(`${supabase_url}/auth/v1/token?grant_type=refresh_token`, {
-    method: "POST",
-    headers: { apikey: supabase_anon_key, "content-type": "application/json" },
-    body: JSON.stringify({ refresh_token }),
-    timeout_ms: 15_000,
-  })
-
-  if (res.status === 400 || res.status === 401) return null
-  if (!res.ok) die(`refresh failed: ${res.status}`)
-  return kparse(refresh_response_schema, await res.json(), "bad refresh response")
-}
-
 function is_enoent(err: unknown) {
   return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT"
 }
-
-type Creds = z.infer<typeof creds>
 
 const callback_html = `<!DOCTYPE html><html><body><script>
 const h = new URLSearchParams(location.hash.slice(1));
@@ -168,6 +256,7 @@ export async function login() {
     server.close()
   }
 
+  clear_session_cache()
   await save_creds(result.access_token, result.refresh_token)
 
   const payload = jwt_payload(result.access_token)
